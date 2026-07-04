@@ -1,0 +1,11 @@
+{
+  "name": "FrameCheck",
+  "short_name": "FrameCheck",
+  "description": "Miroir IA de posture pour la danse partenaire — cadre et ligne de danse en kizomba",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0A0E14",
+  "theme_color": "#0A0E14",
+  "orientation": "portrait",
+  "icons": []
+}

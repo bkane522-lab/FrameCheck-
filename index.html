@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0A0E14">
+<title>FrameCheck — Miroir IA de posture Kizomba</title>
+<link rel="manifest" href="manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0A0E14;
+    --surface:#121821;
+    --surface-2:#1B2430;
+    --line:#26313F;
+    --text:#EDEFF2;
+    --text-muted:#8A93A3;
+    --good:#3DFFC0;
+    --good-dim:#123328;
+    --bad:#FF5C6C;
+    --bad-dim:#331419;
+    --warn:#FFB84D;
+    --warn-dim:#332310;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;overscroll-behavior:none;}
+  body{min-height:100vh; min-height:100dvh; display:flex; flex-direction:column;}
+
+  /* ---------- HEADER ---------- */
+  header{
+    padding:calc(14px + var(--safe-top)) 18px 12px;
+    display:flex; align-items:center; gap:12px;
+    border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg, #0D131B 0%, var(--bg) 100%);
+    position:relative; z-index:5;
+  }
+  .mark{
+    width:34px;height:34px;border-radius:50%;
+    background: conic-gradient(from 0deg, var(--good), transparent 65%, var(--good) 100%);
+    position:relative; flex-shrink:0;
+    animation: spin 5s linear infinite;
+  }
+  .mark::after{
+    content:''; position:absolute; inset:6px; background:var(--bg); border-radius:50%;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .wordmark{display:flex; flex-direction:column; line-height:1.1;}
+  .wordmark b{font-family:'Unbounded',sans-serif; font-size:15px; font-weight:700; letter-spacing:0.02em;}
+  .wordmark span{font-family:'JetBrains Mono',monospace; font-size:9.5px; color:var(--text-muted); letter-spacing:0.08em; text-transform:uppercase; margin-top:2px;}
+
+  /* ---------- TABS ---------- */
+  nav.tabs{
+    display:flex; gap:0; padding:0 14px; background:var(--bg);
+    border-bottom:1px solid var(--line); position:relative; z-index:5;
+  }
+  nav.tabs button{
+    flex:1; background:none; border:none; color:var(--text-muted);
+    font-family:'Inter',sans-serif; font-weight:600; font-size:13px;
+    padding:13px 4px; cursor:pointer; position:relative;
+    letter-spacing:0.01em;
+  }
+  nav.tabs button.active{color:var(--text);}
+  nav.tabs button.active::after{
+    content:''; position:absolute; left:16%; right:16%; bottom:-1px; height:2px;
+    background:var(--good); border-radius:2px;
+  }
+
+  main{flex:1; position:relative; overflow-y:auto; overflow-x:hidden;}
+  .view{display:none; padding-bottom:calc(24px + var(--safe-bottom));}
+  .view.active{display:block;}
+
+  /* ---------- SOLO TRAINING ---------- */
+  #view-solo{padding:0;}
+  .cam-wrap{
+    position:relative; width:100%; aspect-ratio:3/4; background:#000;
+    overflow:hidden; border-bottom:1px solid var(--line);
+  }
+  .cam-wrap video, .cam-wrap canvas{
+    position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
+    transform:scaleX(-1);
+  }
+  .cam-wrap video{opacity:0.001;} /* video drives detection, canvas draws the visible frame */
+
+  .cam-placeholder{
+    position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:14px; text-align:center; padding:0 30px; color:var(--text-muted);
+  }
+  .cam-placeholder .scan-icon{
+    width:64px;height:64px;border-radius:50%; border:2px solid var(--line);
+    position:relative; display:flex; align-items:center; justify-content:center;
+  }
+  .cam-placeholder .scan-icon::before{
+    content:''; position:absolute; inset:-2px; border-radius:50%;
+    border:2px solid transparent; border-top-color:var(--good);
+    animation:spin 1.1s linear infinite;
+  }
+  .cam-placeholder .scan-icon svg{width:26px;height:26px; fill:var(--text-muted);}
+  .cam-placeholder p{font-size:13px; line-height:1.5; margin:0;}
+  .cam-placeholder .err{color:var(--bad); font-family:'JetBrains Mono',monospace; font-size:11px;}
+
+  .btn{
+    font-family:'Inter',sans-serif; font-weight:700; font-size:14px;
+    border:none; border-radius:12px; padding:13px 20px; cursor:pointer;
+    display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  }
+  .btn-primary{background:var(--good); color:#06140F;}
+  .btn-ghost{background:var(--surface-2); color:var(--text); border:1px solid var(--line);}
+  .btn:active{transform:scale(0.97);}
+
+  .feedback-banner{
+    margin:14px 16px 0; padding:14px 16px; border-radius:14px;
+    display:flex; align-items:center; gap:12px;
+    border:1px solid var(--line); background:var(--surface);
+    transition:background .25s, border-color .25s;
+  }
+  .feedback-banner .dot{width:10px;height:10px;border-radius:50%; flex-shrink:0; background:var(--text-muted);}
+  .feedback-banner.status-good{background:var(--good-dim); border-color:#1E5C46;}
+  .feedback-banner.status-good .dot{background:var(--good);}
+  .feedback-banner.status-warn{background:var(--warn-dim); border-color:#6B4E1E;}
+  .feedback-banner.status-warn .dot{background:var(--warn);}
+  .feedback-banner.status-bad{background:var(--bad-dim); border-color:#6B2530;}
+  .feedback-banner.status-bad .dot{background:var(--bad);}
+  .feedback-banner p{margin:0; font-size:14.5px; font-weight:600; line-height:1.35;}
+  .feedback-banner span.sub{display:block; font-family:'JetBrains Mono',monospace; font-size:10.5px; color:var(--text-muted); font-weight:400; margin-top:3px; text-transform:none;}
+
+  .controls-row{display:flex; gap:10px; padding:14px 16px 6px;}
+  .controls-row .btn{flex:1;}
+
+  .gauges{
+    display:grid; grid-template-columns:repeat(4,1fr); gap:8px;
+    padding:12px 16px 4px;
+  }
+  .gauge{display:flex; flex-direction:column; align-items:center; gap:6px;}
+  .dial{
+    width:56px;height:56px;border-radius:50%;
+    background:conic-gradient(var(--dc,var(--text-muted)) calc(var(--pct,0)*1%), var(--surface-2) 0);
+    display:flex; align-items:center; justify-content:center;
+    transition:background .3s ease;
+  }
+  .dial-inner{
+    width:44px;height:44px;border-radius:50%;background:var(--surface);
+    display:flex; align-items:center; justify-content:center;
+    font-family:'JetBrains Mono',monospace; font-size:10.5px; font-weight:700; color:var(--text);
+  }
+  .gauge label{font-size:9.5px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.06em; text-align:center;}
+
+  .info-block{margin:16px; padding:14px 16px; background:var(--surface); border:1px solid var(--line); border-radius:14px;}
+  .info-block h3{margin:0 0 8px; font-size:12px; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-muted); font-weight:600;}
+  .info-block p{margin:0; font-size:12.5px; line-height:1.55; color:var(--text-muted);}
+
+  /* ---------- LE BAL ---------- */
+  #view-bal{padding:18px 16px 8px;}
+  .bal-hero{text-align:center; margin-bottom:18px;}
+  .bal-hero h2{font-family:'Unbounded',sans-serif; font-size:19px; margin:0 0 6px; font-weight:700;}
+  .bal-hero p{font-size:13px; color:var(--text-muted); margin:0; line-height:1.5;}
+
+  .floor-wrap{display:flex; justify-content:center; margin:20px 0 24px;}
+  .floor{
+    width:230px; height:230px; border-radius:50%;
+    border:2px dashed var(--line); position:relative;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .floor::before{
+    content:''; position:absolute; inset:34px; border-radius:50%;
+    border:1px solid var(--line);
+  }
+  .floor .center-label{font-family:'JetBrains Mono',monospace; font-size:9.5px; color:var(--text-muted); text-align:center; line-height:1.6; text-transform:uppercase; letter-spacing:0.04em;}
+  .floor .runner{
+    position:absolute; width:12px; height:12px; border-radius:50%; background:var(--good);
+    top:50%; left:50%; margin:-6px 0 0 -6px;
+    box-shadow:0 0 12px 2px rgba(61,255,192,0.6);
+    animation:orbit 6s linear infinite;
+    transform-origin:6px 6px;
+  }
+  @keyframes orbit{
+    from{ transform: rotate(0deg) translate(97px) rotate(0deg); }
+    to{ transform: rotate(-360deg) translate(97px) rotate(360deg); }
+  }
+  .floor .arrow{
+    position:absolute; width:0; height:0;
+    border-left:5px solid transparent; border-right:5px solid transparent; border-bottom:8px solid var(--warn);
+    top:12px; left:50%; margin-left:-5px; transform:rotate(90deg);
+  }
+
+  .rule-cards{display:flex; flex-direction:column; gap:10px;}
+  .rule-card{
+    display:flex; gap:12px; padding:14px; background:var(--surface); border:1px solid var(--line); border-radius:14px;
+  }
+  .rule-card .num{
+    font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--good);
+    width:26px; height:26px; border-radius:50%; background:var(--good-dim);
+    display:flex; align-items:center; justify-content:center; flex-shrink:0; font-weight:700;
+  }
+  .rule-card h4{margin:0 0 3px; font-size:13.5px; font-weight:700;}
+  .rule-card p{margin:0; font-size:12px; color:var(--text-muted); line-height:1.5;}
+
+  .toggle-legend{display:flex; justify-content:center; gap:16px; margin-top:2px; margin-bottom:6px;}
+  .toggle-legend span{font-size:10.5px; color:var(--text-muted); display:flex; align-items:center; gap:5px; font-family:'JetBrains Mono',monospace;}
+  .toggle-legend i{width:8px;height:8px;border-radius:50%; display:inline-block;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="mark"></div>
+  <div class="wordmark">
+    <b>FRAMECHECK</b>
+    <span>Posture · Ligne de danse · Kizomba</span>
+  </div>
+</header>
+
+<nav class="tabs">
+  <button id="tab-solo" class="active">Entraînement Solo</button>
+  <button id="tab-bal">Le Bal</button>
+</nav>
+
+<main>
+  <!-- ================= SOLO TRAINING ================= -->
+  <section id="view-solo" class="view active">
+    <div class="cam-wrap">
+      <video id="video" playsinline autoplay muted></video>
+      <canvas id="overlay"></canvas>
+      <div id="cam-placeholder" class="cam-placeholder">
+        <div class="scan-icon">
+          <svg viewBox="0 0 24 24"><path d="M12 2a5 5 0 015 5v3a5 5 0 01-10 0V7a5 5 0 015-5zm7 8a1 1 0 011 1 8 8 0 01-7 7.94V21h2a1 1 0 010 2H11a1 1 0 010-2h2v-2.06A8 8 0 016 11a1 1 0 012 0 6 6 0 0012 0 1 1 0 011-1z"/></svg>
+        </div>
+        <p id="cam-msg">Active la caméra pour analyser ton cadre en temps réel.<br>Place ton téléphone face à toi, à hauteur de poitrine.</p>
+        <button id="btn-start" class="btn btn-primary">Démarrer la caméra</button>
+      </div>
+    </div>
+
+    <div id="feedback" class="feedback-banner">
+      <div class="dot"></div>
+      <p>En attente d'analyse<span class="sub">Lance la caméra pour commencer</span></p>
+    </div>
+
+    <div class="gauges">
+      <div class="gauge">
+        <div class="dial" id="dial-arml"><div class="dial-inner" id="val-arml">--°</div></div>
+        <label>Bras G</label>
+      </div>
+      <div class="gauge">
+        <div class="dial" id="dial-armr"><div class="dial-inner" id="val-armr">--°</div></div>
+        <label>Bras D</label>
+      </div>
+      <div class="gauge">
+        <div class="dial" id="dial-back"><div class="dial-inner" id="val-back">--°</div></div>
+        <label>Dos</label>
+      </div>
+      <div class="gauge">
+        <div class="dial" id="dial-rot"><div class="dial-inner" id="val-rot">--°</div></div>
+        <label>Rotation</label>
+      </div>
+    </div>
+
+    <div class="controls-row">
+      <button id="btn-stop" class="btn btn-ghost" style="display:none;">Arrêter</button>
+    </div>
+
+    <div class="info-block">
+      <h3>Comment lire les cadrans</h3>
+      <p>Vert = cadre correct. Orange = attention. Rouge = à corriger. Les seuils sont calibrés pour un cadre kizomba standard (bras à hauteur d'épaule, dos droit, épaules stables par rapport au bassin) — ajuste ta posture selon ton style et ton ressenti, l'IA donne une indication, pas une vérité absolue.</p>
+    </div>
+  </section>
+
+  <!-- ================= LE BAL ================= -->
+  <section id="view-bal" class="view">
+    <div class="bal-hero">
+      <h2>La ligne de danse (LOD)</h2>
+      <p>En société, tous les couples tournent ensemble autour de la piste, dans le même sens. Ton cadre doit rester stable même quand tu te déplaces dans ce flux collectif.</p>
+    </div>
+
+    <div class="floor-wrap">
+      <div class="floor">
+        <div class="arrow"></div>
+        <div class="runner"></div>
+        <div class="center-label">SENS DE<br>ROTATION</div>
+      </div>
+    </div>
+    <div class="toggle-legend">
+      <span><i style="background:var(--good)"></i>Couple en mouvement</span>
+      <span><i style="background:var(--warn)"></i>Sens conventionnel</span>
+    </div>
+
+    <div class="rule-cards">
+      <div class="rule-card">
+        <div class="num">1</div>
+        <div>
+          <h4>Un seul sens, jamais à contre-courant</h4>
+          <p>Tous les couples avancent dans le même sens autour de la piste. Remonter le flux ou reculer à contre-sens crée des collisions et casse l'ambiance du bal.</p>
+        </div>
+      </div>
+      <div class="rule-card">
+        <div class="num">2</div>
+        <div>
+          <h4>Le centre est un couloir de dépassement</h4>
+          <p>Les couples plus lents restent près du bord extérieur, les dépassements se font par l'intérieur de la piste, jamais brusquement.</p>
+        </div>
+      </div>
+      <div class="rule-card">
+        <div class="num">3</div>
+        <div>
+          <h4>Ne bloque pas le flux</h4>
+          <p>Éviter de s'arrêter net dans la ligne de danse. Si tu dois marquer une pause, dégage-toi légèrement vers l'extérieur.</p>
+        </div>
+      </div>
+      <div class="rule-card">
+        <div class="num">4</div>
+        <div>
+          <h4>Cadre stable même en rotation</h4>
+          <p>C'est le lien entre les deux modes de l'app : un cadre qui se tord ou s'affaisse pendant un tour se ressent immédiatement par ton ou ta partenaire, et perturbe la trajectoire du couple dans le flux.</p>
+        </div>
+      </div>
+      <div class="rule-card">
+        <div class="num">5</div>
+        <div>
+          <h4>Conscience périphérique</h4>
+          <p>Garde un œil (sans quitter ton cadre des yeux) sur les couples autour de toi — anticiper vaut mieux que corriger après coup.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script type="module">
+import { PoseLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+
+/* ---------- TAB NAVIGATION ---------- */
+const tabSolo = document.getElementById('tab-solo');
+const tabBal = document.getElementById('tab-bal');
+const viewSolo = document.getElementById('view-solo');
+const viewBal = document.getElementById('view-bal');
+
+tabSolo.addEventListener('click', () => {
+  tabSolo.classList.add('active'); tabBal.classList.remove('active');
+  viewSolo.classList.add('active'); viewBal.classList.remove('active');
+});
+tabBal.addEventListener('click', () => {
+  tabBal.classList.add('active'); tabSolo.classList.remove('active');
+  viewBal.classList.add('active'); viewSolo.classList.remove('active');
+  stopCamera();
+});
+
+/* ---------- STATE ---------- */
+const video = document.getElementById('video');
+const canvas = document.getElementById('overlay');
+const ctx = canvas.getContext('2d');
+const placeholder = document.getElementById('cam-placeholder');
+const camMsg = document.getElementById('cam-msg');
+const btnStart = document.getElementById('btn-start');
+const btnStop = document.getElementById('btn-stop');
+const feedback = document.getElementById('feedback');
+
+let poseLandmarker = null;
+let running = false;
+let stream = null;
+let rafId = null;
+let lastVideoTime = -1;
+
+const CONNECTIONS = [
+  [11,13],[13,15],       // left arm
+  [12,14],[14,16],       // right arm
+  [11,12],               // shoulders
+  [23,24],               // hips
+  [11,23],[12,24],       // torso sides
+  [23,25],[24,26],       // thighs
+  [0,11],[0,12]          // neck-ish to shoulders
+];
+
+/* ---------- SETUP MODEL ---------- */
+async function initModel(){
+  const vision = await FilesetResolver.forVisionTasks(
+    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+  );
+  poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+    baseOptions: {
+      modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+      delegate: "GPU"
+    },
+    runningMode: "VIDEO",
+    numPoses: 1
+  });
+}
+
+/* ---------- CAMERA ---------- */
+async function startCamera(){
+  btnStart.disabled = true;
+  camMsg.textContent = "Chargement du modèle IA...";
+  try{
+    if(!poseLandmarker) await initModel();
+    camMsg.textContent = "Activation de la caméra...";
+    stream = await navigator.mediaDevices.getUserMedia({
+      video:{ facingMode:'user', width:{ideal:720}, height:{ideal:960} },
+      audio:false
+    });
+    video.srcObject = stream;
+    await video.play();
+    placeholder.style.display = 'none';
+    btnStop.style.display = 'inline-flex';
+    running = true;
+    resizeCanvas();
+    loop();
+  }catch(err){
+    console.error(err);
+    camMsg.innerHTML = 'Impossible d\'accéder à la caméra.<br><span class="err">'+ (err.message||err) +'</span>';
+    btnStart.disabled = false;
+  }
+}
+
+function stopCamera(){
+  running = false;
+  if(rafId) cancelAnimationFrame(rafId);
+  if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
+  placeholder.style.display = 'flex';
+  btnStop.style.display = 'none';
+  btnStart.disabled = false;
+  camMsg.textContent = "Active la caméra pour analyser ton cadre en temps réel.";
+  feedback.className = 'feedback-banner';
+  feedback.innerHTML = '<div class="dot"></div><p>En attente d\'analyse<span class="sub">Lance la caméra pour commencer</span></p>';
+}
+
+btnStart.addEventListener('click', startCamera);
+btnStop.addEventListener('click', stopCamera);
+window.addEventListener('resize', resizeCanvas);
+
+function resizeCanvas(){
+  const rect = video.getBoundingClientRect();
+  canvas.width = rect.width;
+  canvas.height = rect.height;
+}
+
+/* ---------- MATH HELPERS ---------- */
+function dist(a,b){ return Math.hypot(a.x-b.x, a.y-b.y); }
+function mid(a,b){ return {x:(a.x+b.x)/2, y:(a.y+b.y)/2}; }
+function angleAt(a,b,c){
+  // angle at point b, formed by a-b-c, in degrees
+  const v1 = {x:a.x-b.x, y:a.y-b.y};
+  const v2 = {x:c.x-b.x, y:c.y-b.y};
+  const dot = v1.x*v2.x + v1.y*v2.y;
+  const m1 = Math.hypot(v1.x,v1.y), m2 = Math.hypot(v2.x,v2.y);
+  if(m1===0||m2===0) return 0;
+  let cos = dot/(m1*m2);
+  cos = Math.max(-1,Math.min(1,cos));
+  return Math.acos(cos) * 180/Math.PI;
+}
+function angleFromVertical(p1,p2){
+  // angle of vector p1->p2 relative to vertical axis (0 = perfectly vertical)
+  const dx = p2.x-p1.x, dy = p2.y-p1.y;
+  const angle = Math.atan2(Math.abs(dx), Math.abs(dy)) * 180/Math.PI;
+  return angle;
+}
+function lineAngle(p1,p2){
+  return Math.atan2(p2.y-p1.y, p2.x-p1.x) * 180/Math.PI;
+}
+
+function setDial(id,valueId,deg,pct,status){
+  const dial = document.getElementById(id);
+  const val = document.getElementById(valueId);
+  const color = status==='good' ? 'var(--good)' : status==='warn' ? 'var(--warn)' : 'var(--bad)';
+  dial.style.setProperty('--pct', Math.max(6,Math.min(100,pct)));
+  dial.style.setProperty('--dc', color);
+  val.textContent = Math.round(deg) + '°';
+}
+
+/* ---------- DETECTION LOOP ---------- */
+function loop(){
+  if(!running) return;
+  if(video.currentTime !== lastVideoTime){
+    lastVideoTime = video.currentTime;
+    const result = poseLandmarker.detectForVideo(video, performance.now());
+    draw(result);
+  }
+  rafId = requestAnimationFrame(loop);
+}
+
+function draw(result){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  const lm = result.landmarks && result.landmarks[0];
+  if(!lm){
+    updateFeedback('warn','Corps non détecté','Recule-toi ou améliore la lumière');
+    return;
+  }
+
+  const W = canvas.width, H = canvas.height;
+  const pt = i => ({x: lm[i].x*W, y: lm[i].y*H});
+
+  const shL = pt(11), shR = pt(12), elL = pt(13), elR = pt(14), wrL = pt(15), wrR = pt(16);
+  const hipL = pt(23), hipR = pt(24), nose = pt(0);
+  const shMid = mid(shL,shR), hipMid = mid(hipL,hipR);
+  const torso = dist(shMid,hipMid) || 1;
+
+  /* ---- metric 1 & 2: arm height (shoulder vs wrist) ---- */
+  function armStatus(sh, wr, elbow, label, dialId, valId){
+    const heightDiff = (wr.y - sh.y) / torso; // positive = wrist below shoulder
+    let status, pct, msg=null;
+    if(heightDiff > 0.55){ status='bad'; msg = 'Bras '+label+' trop bas'; }
+    else if(heightDiff > 0.35){ status='warn'; msg = 'Bras '+label+' un peu bas'; }
+    else if(heightDiff < -0.15){ status='bad'; msg = 'Bras '+label+' trop haut'; }
+    else { status='good'; }
+    pct = Math.max(0, 100 - Math.abs(heightDiff-0.15)*140);
+    setDial(dialId, valId, angleAt(sh,elbow,wr), pct, status);
+    return {status, msg, heightDiff};
+  }
+  const armLres = armStatus(shL, wrL, elL, 'gauche', 'dial-arml', 'val-arml');
+  const armRres = armStatus(shR, wrR, elR, 'droit', 'dial-armr', 'val-armr');
+
+  /* ---- metric 3: back alignment ---- */
+  const backDev = angleFromVertical(hipMid, shMid);
+  let backStatus, backMsg=null;
+  if(backDev > 16){ backStatus='bad'; backMsg='Dos pas assez droit, redresse-toi'; }
+  else if(backDev > 8){ backStatus='warn'; backMsg='Dos légèrement penché'; }
+  else backStatus='good';
+  setDial('dial-back','val-back', backDev, 100 - backDev*4, backStatus);
+
+  /* ---- metric 4: shoulder/hip rotation (torsion) ---- */
+  const shAngle = lineAngle(shL,shR);
+  const hipAngle = lineAngle(hipL,hipR);
+  let torsion = Math.abs(shAngle - hipAngle);
+  if(torsion > 90) torsion = 180 - torsion;
+  let rotStatus, rotMsg=null;
+  if(torsion > 20){ rotStatus='bad'; rotMsg='Cadre qui tourne, stabilise épaules et bassin'; }
+  else if(torsion > 10){ rotStatus='warn'; rotMsg='Légère torsion du buste'; }
+  else rotStatus='good';
+  setDial('dial-rot','val-rot', torsion, 100 - torsion*4, rotStatus);
+
+  /* ---- overall feedback: worst status wins ---- */
+  const issues = [armLres, armRres, {status:backStatus,msg:backMsg}, {status:rotStatus,msg:rotMsg}]
+    .filter(i => i.msg);
+  const bad = issues.find(i=>i.status==='bad');
+  const warn = issues.find(i=>i.status==='warn');
+  if(bad) updateFeedback('bad', bad.msg, 'Corrige et regarde le cadran concerné');
+  else if(warn) updateFeedback('warn', warn.msg, 'Presque parfait, ajuste légèrement');
+  else updateFeedback('good', 'Cadre solide, continue comme ça', 'Bras, dos et rotation sont alignés');
+
+  /* ---- draw skeleton ---- */
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  CONNECTIONS.forEach(([a,b])=>{
+    const p1 = pt(a), p2 = pt(b);
+    let color = 'rgba(237,239,242,0.55)';
+    if((a===11&&b===13)||(a===13&&b===15)) color = armLres.status==='good' ? '#3DFFC0' : armLres.status==='warn' ? '#FFB84D' : '#FF5C6C';
+    if((a===12&&b===14)||(a===14&&b===16)) color = armRres.status==='good' ? '#3DFFC0' : armRres.status==='warn' ? '#FFB84D' : '#FF5C6C';
+    if((a===11&&b===23)||(a===12&&b===24)) color = backStatus==='good' ? '#3DFFC0' : backStatus==='warn' ? '#FFB84D' : '#FF5C6C';
+    if(a===11&&b===12) color = rotStatus==='good' ? '#3DFFC0' : rotStatus==='warn' ? '#FFB84D' : '#FF5C6C';
+    ctx.strokeStyle = color;
+    ctx.beginPath(); ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.stroke();
+  });
+  [11,12,13,14,15,16,23,24,0].forEach(i=>{
+    const p = pt(i);
+    ctx.beginPath(); ctx.arc(p.x,p.y,4,0,Math.PI*2);
+    ctx.fillStyle = '#EDEFF2'; ctx.fill();
+  });
+}
+
+function updateFeedback(status,msg,sub){
+  feedback.className = 'feedback-banner status-'+status;
+  feedback.innerHTML = '<div class="dot"></div><p>'+msg+'<span class="sub">'+sub+'</span></p>';
+}
+</script>
+</body>
+</html>
