@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#0A0E14">
+<meta name="theme-color" content="#0A0B14">
 <title>FrameCheck — Miroir IA de posture Kizomba</title>
 <link rel="manifest" href="manifest.json">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -59,27 +59,32 @@
 
   /* ---------- TABS ---------- */
   nav.tabs{
-    display:flex; gap:0; padding:0 14px; background:var(--bg);
+    display:flex; gap:0; padding:0 6px; background:var(--bg);
     border-bottom:1px solid var(--line); position:relative; z-index:5;
+    overflow-x:auto; scrollbar-width:none;
   }
+  nav.tabs::-webkit-scrollbar{display:none;}
   nav.tabs button{
-    flex:1; background:none; border:none; color:var(--text-muted);
-    font-family:'Inter',sans-serif; font-weight:600; font-size:13px;
-    padding:13px 4px; cursor:pointer; position:relative;
-    letter-spacing:0.01em;
+    flex:1 0 auto; min-width:88px; background:none; border:none; color:var(--text-muted);
+    font-family:'Inter',sans-serif; font-weight:600; font-size:12.5px;
+    padding:13px 10px; cursor:pointer; position:relative;
+    letter-spacing:0.01em; white-space:nowrap;
   }
   nav.tabs button.active{color:var(--text);}
   nav.tabs button.active::after{
     content:''; position:absolute; left:16%; right:16%; bottom:-1px; height:2px;
-    background:var(--good); border-radius:2px;
+    background:linear-gradient(90deg, var(--good), var(--pop2)); border-radius:2px;
   }
 
   main{flex:1; position:relative; overflow-y:auto; overflow-x:hidden;}
   .view{display:none; padding-bottom:calc(24px + var(--safe-bottom));}
   .view.active{display:block;}
+  .mode-panel{display:none;}
+  .mode-panel.active{display:block;}
 
-  /* ---------- SOLO TRAINING ---------- */
-  #view-solo{padding:0;}
+  /* ---------- CAMERA STAGE (shared across Cadre / LOD / Créativité) ---------- */
+  #camera-stage{display:none;}
+  #camera-stage.active{display:block;}
   .cam-wrap{
     position:relative; width:100%; aspect-ratio:3/4; background:#000;
     overflow:hidden; border-bottom:1px solid var(--line);
@@ -88,7 +93,7 @@
     position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
     transform:scaleX(-1);
   }
-  .cam-wrap video{opacity:0.001;} /* video drives detection, canvas draws the visible frame */
+  .cam-wrap video{opacity:0.001;}
 
   .cam-placeholder{
     position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
@@ -131,8 +136,14 @@
     color:#06140F;
     box-shadow:0 0 24px -4px rgba(61,255,192,0.65);
   }
+  .btn-pop{
+    background:linear-gradient(120deg, var(--pop), var(--pop2));
+    color:#fff;
+    box-shadow:0 0 24px -4px rgba(255,61,166,0.55);
+  }
   .btn-ghost{background:var(--surface-2); color:var(--text); border:1px solid var(--line);}
   .btn:active{transform:scale(0.97);}
+  .btn:disabled{opacity:0.5;}
 
   .feedback-banner{
     margin:14px 16px 0; padding:14px 16px; border-radius:14px;
@@ -153,6 +164,7 @@
   .controls-row{display:flex; gap:10px; padding:14px 16px 6px;}
   .controls-row .btn{flex:1;}
 
+  /* ---------- CADRE GAUGES ---------- */
   .gauges{
     display:grid; grid-template-columns:repeat(4,1fr); gap:8px;
     padding:12px 16px 4px;
@@ -175,6 +187,69 @@
   .info-block{margin:16px; padding:14px 16px; background:var(--surface); border:1px solid var(--line); border-radius:14px;}
   .info-block h3{margin:0 0 8px; font-size:12px; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-muted); font-weight:600;}
   .info-block p{margin:0; font-size:12.5px; line-height:1.55; color:var(--text-muted);}
+
+  /* ---------- LIGNE DE DANSE (exercise) ---------- */
+  .lod-panel{padding:0 16px;}
+  .lod-instruction{
+    margin-top:14px; padding:20px 16px; border-radius:16px; text-align:center;
+    background:var(--surface); border:1px solid var(--line);
+    display:flex; flex-direction:column; align-items:center; gap:8px;
+  }
+  .lod-arrow{
+    width:52px;height:52px; display:flex; align-items:center; justify-content:center;
+    border-radius:50%; background:var(--surface-2);
+    transition:transform .3s ease;
+  }
+  .lod-arrow svg{width:26px;height:26px; fill:none; stroke:var(--pop2); stroke-width:2.2;}
+  .lod-instruction h2{font-family:'Unbounded',sans-serif; font-size:17px; margin:4px 0 0;}
+  .lod-instruction span{font-family:'JetBrains Mono',monospace; font-size:10.5px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em;}
+
+  .lod-status-pill{
+    margin:12px auto 0; padding:7px 16px; border-radius:20px; width:fit-content;
+    font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em;
+    background:var(--surface-2); color:var(--text-muted); border:1px solid var(--line);
+  }
+  .lod-status-pill.ok{background:var(--good-dim); color:var(--good); border-color:#1E5C46;}
+  .lod-status-pill.fail{background:var(--bad-dim); color:var(--bad); border-color:#6B2530;}
+
+  .lod-score{
+    margin:16px 0 4px; display:flex; align-items:center; justify-content:space-between;
+    padding:16px; background:var(--surface); border:1px solid var(--line); border-radius:14px;
+  }
+  .lod-score .big{font-family:'Unbounded',sans-serif; font-size:30px; font-weight:700; color:var(--pop2);}
+  .lod-score .lbl{font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em;}
+  .lod-score .stats{text-align:right; font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text-muted); line-height:1.6;}
+
+  /* ---------- CRÉATIVITÉ (movement diversity) ---------- */
+  .creative-panel{padding:0 16px;}
+  .creative-hero{
+    margin-top:14px; padding:18px 16px; border-radius:16px; text-align:center;
+    background:var(--surface); border:1px solid var(--line);
+  }
+  .creative-hero h2{font-family:'Unbounded',sans-serif; font-size:16px; margin:0 0 8px;}
+  .creative-hero p{font-size:12.5px; color:var(--text-muted); margin:0; line-height:1.5;}
+  .creative-timer{
+    font-family:'JetBrains Mono',monospace; font-size:26px; font-weight:700; margin:14px 0 4px;
+    color:var(--pop);
+  }
+  .creative-samples{font-family:'JetBrains Mono',monospace; font-size:10.5px; color:var(--text-muted);}
+
+  .diversity-result{display:none; margin-top:14px;}
+  .diversity-result.show{display:block;}
+  .diversity-score-card{
+    padding:22px 16px; border-radius:16px; text-align:center;
+    background:linear-gradient(160deg, rgba(255,61,166,0.14), rgba(124,92,255,0.14)), var(--surface);
+    border:1px solid var(--line);
+  }
+  .diversity-score-card .score{font-family:'Unbounded',sans-serif; font-size:44px; font-weight:800;
+    background:linear-gradient(90deg, var(--good), var(--pop2)); -webkit-background-clip:text; background-clip:text; color:transparent;}
+  .diversity-score-card .score-lbl{font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.06em; margin-top:2px;}
+  .breakdown{display:flex; flex-direction:column; gap:8px; margin-top:14px;}
+  .breakdown-row{display:flex; align-items:center; gap:10px;}
+  .breakdown-row .b-label{font-size:11.5px; color:var(--text-muted); width:96px; flex-shrink:0;}
+  .breakdown-row .b-track{flex:1; height:6px; border-radius:4px; background:var(--surface-2); overflow:hidden;}
+  .breakdown-row .b-fill{height:100%; border-radius:4px; background:linear-gradient(90deg, var(--good), var(--pop2));}
+  .breakdown-row .b-val{font-family:'JetBrains Mono',monospace; font-size:10.5px; color:var(--text-muted); width:32px; text-align:right;}
 
   /* ---------- LE BAL ---------- */
   #view-bal{padding:18px 16px 8px;}
@@ -228,6 +303,9 @@
   .toggle-legend{display:flex; justify-content:center; gap:16px; margin-top:2px; margin-bottom:6px;}
   .toggle-legend span{font-size:10.5px; color:var(--text-muted); display:flex; align-items:center; gap:5px; font-family:'JetBrains Mono',monospace;}
   .toggle-legend i{width:8px;height:8px;border-radius:50%; display:inline-block;}
+
+  .cta-inline{margin:16px; text-align:center;}
+  .cta-inline .btn{width:100%;}
 </style>
 </head>
 <body>
@@ -241,13 +319,16 @@
 </header>
 
 <nav class="tabs">
-  <button id="tab-solo" class="active">Entraînement Solo</button>
+  <button id="tab-cadre" class="active">Cadre</button>
+  <button id="tab-lod">Ligne de Danse</button>
+  <button id="tab-creative">Créativité</button>
   <button id="tab-bal">Le Bal</button>
 </nav>
 
 <main>
-  <!-- ================= SOLO TRAINING ================= -->
-  <section id="view-solo" class="view active">
+
+  <!-- ============ SHARED CAMERA STAGE (Cadre / Ligne de Danse / Créativité) ============ -->
+  <div id="camera-stage">
     <div class="cam-wrap">
       <video id="video" playsinline autoplay muted></video>
       <canvas id="overlay"></canvas>
@@ -259,46 +340,113 @@
             <circle cx="12" cy="9.5" r="2.2"/><path d="M8 17c.7-2.2 2.2-3.3 4-3.3s3.3 1.1 4 3.3"/>
           </svg>
         </div>
-        <p id="cam-msg">Active la caméra pour analyser ton cadre en temps réel.<br>Place ton téléphone face à toi, à hauteur de poitrine.</p>
+        <p id="cam-msg">Active la caméra pour commencer.<br>Place ton téléphone face à toi, à hauteur de poitrine.</p>
         <button id="btn-start" class="btn btn-primary">Démarrer la caméra</button>
       </div>
     </div>
-
-    <div id="feedback" class="feedback-banner">
-      <div class="dot"></div>
-      <p>En attente d'analyse<span class="sub">Lance la caméra pour commencer</span></p>
-    </div>
-
-    <div class="gauges">
-      <div class="gauge">
-        <div class="dial" id="dial-arml"><div class="dial-inner" id="val-arml">--°</div></div>
-        <label>Bras G</label>
-      </div>
-      <div class="gauge">
-        <div class="dial" id="dial-armr"><div class="dial-inner" id="val-armr">--°</div></div>
-        <label>Bras D</label>
-      </div>
-      <div class="gauge">
-        <div class="dial" id="dial-back"><div class="dial-inner" id="val-back">--°</div></div>
-        <label>Dos</label>
-      </div>
-      <div class="gauge">
-        <div class="dial" id="dial-rot"><div class="dial-inner" id="val-rot">--°</div></div>
-        <label>Rotation</label>
-      </div>
-    </div>
-
     <div class="controls-row">
-      <button id="btn-stop" class="btn btn-ghost" style="display:none;">Arrêter</button>
+      <button id="btn-stop" class="btn btn-ghost" style="display:none;">Arrêter la caméra</button>
     </div>
+  </div>
 
-    <div class="info-block">
-      <h3>Comment lire les cadrans</h3>
-      <p>Vert = cadre correct. Orange = attention. Rouge = à corriger. Les seuils sont calibrés pour un cadre kizomba standard (bras à hauteur d'épaule, dos droit, épaules stables par rapport au bassin) — ajuste ta posture selon ton style et ton ressenti, l'IA donne une indication, pas une vérité absolue.</p>
+  <!-- ============ CADRE (posture) ============ -->
+  <section id="view-cadre" class="view active">
+    <div class="mode-panel active" id="panel-cadre">
+      <div id="feedback" class="feedback-banner">
+        <div class="dot"></div>
+        <p>En attente d'analyse<span class="sub">Lance la caméra pour commencer</span></p>
+      </div>
+
+      <div class="gauges">
+        <div class="gauge">
+          <div class="dial" id="dial-arml"><div class="dial-inner" id="val-arml">--°</div></div>
+          <label>Bras G</label>
+        </div>
+        <div class="gauge">
+          <div class="dial" id="dial-armr"><div class="dial-inner" id="val-armr">--°</div></div>
+          <label>Bras D</label>
+        </div>
+        <div class="gauge">
+          <div class="dial" id="dial-back"><div class="dial-inner" id="val-back">--°</div></div>
+          <label>Dos</label>
+        </div>
+        <div class="gauge">
+          <div class="dial" id="dial-rot"><div class="dial-inner" id="val-rot">--°</div></div>
+          <label>Rotation</label>
+        </div>
+      </div>
+
+      <div class="info-block">
+        <h3>Comment lire les cadrans</h3>
+        <p>Vert = cadre correct. Orange = attention. Rouge = à corriger. Les seuils sont calibrés pour un cadre kizomba standard — ajuste ta posture selon ton style et ton ressenti, l'IA donne une indication, pas une vérité absolue.</p>
+      </div>
     </div>
   </section>
 
-  <!-- ================= LE BAL ================= -->
+  <!-- ============ LIGNE DE DANSE (exercise) ============ -->
+  <section id="view-lod" class="view">
+    <div class="mode-panel active" id="panel-lod">
+      <div class="lod-panel">
+        <div class="lod-instruction">
+          <div class="lod-arrow" id="lod-arrow-wrap">
+            <svg id="lod-arrow-svg" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h16M14 6l6 6-6 6"/></svg>
+          </div>
+          <h2 id="lod-instruction-text">Démarre la caméra</h2>
+          <span id="lod-instruction-sub">pour commencer l'exercice</span>
+        </div>
+
+        <div id="lod-status" class="lod-status-pill">En attente</div>
+
+        <div class="lod-score">
+          <div>
+            <div class="big" id="lod-score-val">--%</div>
+            <div class="lbl">Fluidité</div>
+          </div>
+          <div class="stats" id="lod-stats">0 / 0 séquences réussies</div>
+        </div>
+
+        <div class="info-block" style="margin:16px 0;">
+          <h3>Principe de l'exercice</h3>
+          <p>Une consigne change toutes les quelques secondes : avance dans le sens indiqué, ou évite de bloquer le flux si aucun sens n'est donné. L'appli suit ton déplacement latéral dans le cadre de la caméra et vérifie que tu ne pars jamais à contre-sens ni ne restes figé.</p>
+        </div>
+
+        <div class="cta-inline">
+          <button id="btn-lod-reset" class="btn btn-ghost" style="width:auto; padding:11px 18px;">Réinitialiser le score</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CRÉATIVITÉ (movement diversity) ============ -->
+  <section id="view-creative" class="view">
+    <div class="mode-panel active" id="panel-creative">
+      <div class="creative-panel">
+        <div class="creative-hero">
+          <h2>Indice de diversité de mouvement</h2>
+          <p>Honnêteté d'abord : l'IA ne juge pas ta créativité artistique. Elle mesure si tes mouvements varient (amplitude des bras, rotations, hauteur) ou si tu répètes la même figure en boucle pendant la session.</p>
+          <div class="creative-timer" id="creative-timer">00:00</div>
+          <div class="creative-samples" id="creative-samples">0 mesures enregistrées</div>
+          <div class="controls-row" style="padding:14px 0 0;">
+            <button id="btn-creative-toggle" class="btn btn-pop">Démarrer la session</button>
+          </div>
+        </div>
+
+        <div id="diversity-result" class="diversity-result">
+          <div class="diversity-score-card">
+            <div class="score" id="diversity-score">--</div>
+            <div class="score-lbl">Indice de diversité</div>
+          </div>
+          <div class="breakdown" id="diversity-breakdown"></div>
+          <div class="info-block">
+            <h3>À lire ainsi</h3>
+            <p>Score élevé = tu as varié hauteur des bras, rotations et posture du dos durant la session. Score bas = mouvements plutôt répétitifs. Ce n'est qu'un indicateur de variété motrice, pas un jugement sur ton style.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ LE BAL ============ -->
   <section id="view-bal" class="view">
     <div class="bal-hero">
       <h2>La ligne de danse (LOD)</h2>
@@ -343,7 +491,7 @@
         <div class="num">4</div>
         <div>
           <h4>Cadre stable même en rotation</h4>
-          <p>C'est le lien entre les deux modes de l'app : un cadre qui se tord ou s'affaisse pendant un tour se ressent immédiatement par ton ou ta partenaire, et perturbe la trajectoire du couple dans le flux.</p>
+          <p>Un cadre qui se tord ou s'affaisse pendant un tour se ressent immédiatement par ton ou ta partenaire, et perturbe la trajectoire du couple dans le flux.</p>
         </div>
       </div>
       <div class="rule-card">
@@ -354,29 +502,62 @@
         </div>
       </div>
     </div>
+
+    <div class="cta-inline">
+      <button id="btn-goto-lod" class="btn btn-pop">Essayer l'exercice Ligne de Danse</button>
+    </div>
   </section>
+
 </main>
 
 <script type="module">
 import { PoseLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
 
-/* ---------- TAB NAVIGATION ---------- */
-const tabSolo = document.getElementById('tab-solo');
-const tabBal = document.getElementById('tab-bal');
-const viewSolo = document.getElementById('view-solo');
-const viewBal = document.getElementById('view-bal');
+/* =========================================================
+   TAB NAVIGATION
+   ========================================================= */
+const tabs = {
+  cadre: document.getElementById('tab-cadre'),
+  lod: document.getElementById('tab-lod'),
+  creative: document.getElementById('tab-creative'),
+  bal: document.getElementById('tab-bal')
+};
+const views = {
+  cadre: document.getElementById('view-cadre'),
+  lod: document.getElementById('view-lod'),
+  creative: document.getElementById('view-creative'),
+  bal: document.getElementById('view-bal')
+};
+const cameraStage = document.getElementById('camera-stage');
+const CAMERA_MODES = ['cadre','lod','creative'];
+let currentMode = 'cadre';
 
-tabSolo.addEventListener('click', () => {
-  tabSolo.classList.add('active'); tabBal.classList.remove('active');
-  viewSolo.classList.add('active'); viewBal.classList.remove('active');
-});
-tabBal.addEventListener('click', () => {
-  tabBal.classList.add('active'); tabSolo.classList.remove('active');
-  viewBal.classList.add('active'); viewSolo.classList.remove('active');
-  stopCamera();
-});
+function switchTo(mode){
+  currentMode = mode;
+  Object.keys(tabs).forEach(k=>{
+    tabs[k].classList.toggle('active', k===mode);
+    views[k].classList.toggle('active', k===mode);
+  });
+  if(CAMERA_MODES.includes(mode)){
+    cameraStage.classList.add('active');
+    views[mode].prepend(cameraStage);
+    if(mode !== 'cadre') resetCadreUIIfNeeded();
+  } else {
+    cameraStage.classList.remove('active');
+    stopCamera();
+  }
+}
+tabs.cadre.addEventListener('click', ()=>switchTo('cadre'));
+tabs.lod.addEventListener('click', ()=>switchTo('lod'));
+tabs.creative.addEventListener('click', ()=>switchTo('creative'));
+tabs.bal.addEventListener('click', ()=>switchTo('bal'));
+document.getElementById('btn-goto-lod').addEventListener('click', ()=>switchTo('lod'));
 
-/* ---------- STATE ---------- */
+function resetCadreUIIfNeeded(){ /* placeholder hook, cadre gauges just stop updating when not active */ }
+
+/* =========================================================
+   CAMERA + POSE MODEL (shared)
+   ========================================================= */
 const video = document.getElementById('video');
 const canvas = document.getElementById('overlay');
 const ctx = canvas.getContext('2d');
@@ -393,16 +574,15 @@ let rafId = null;
 let lastVideoTime = -1;
 
 const CONNECTIONS = [
-  [11,13],[13,15],       // left arm
-  [12,14],[14,16],       // right arm
-  [11,12],               // shoulders
-  [23,24],               // hips
-  [11,23],[12,24],       // torso sides
-  [23,25],[24,26],       // thighs
-  [0,11],[0,12]          // neck-ish to shoulders
+  [11,13],[13,15],
+  [12,14],[14,16],
+  [11,12],
+  [23,24],
+  [11,23],[12,24],
+  [23,25],[24,26],
+  [0,11],[0,12]
 ];
 
-/* ---------- SETUP MODEL ---------- */
 async function initModel(){
   const vision = await FilesetResolver.forVisionTasks(
     "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
@@ -417,7 +597,6 @@ async function initModel(){
   });
 }
 
-/* ---------- CAMERA ---------- */
 async function startCamera(){
   btnStart.disabled = true;
   camMsg.textContent = "Chargement du modèle IA...";
@@ -434,6 +613,7 @@ async function startCamera(){
     btnStop.style.display = 'inline-flex';
     running = true;
     resizeCanvas();
+    lodResetWindow();
     loop();
   }catch(err){
     console.error(err);
@@ -449,9 +629,13 @@ function stopCamera(){
   placeholder.style.display = 'flex';
   btnStop.style.display = 'none';
   btnStart.disabled = false;
-  camMsg.textContent = "Active la caméra pour analyser ton cadre en temps réel.";
+  camMsg.textContent = "Active la caméra pour commencer.";
   feedback.className = 'feedback-banner';
   feedback.innerHTML = '<div class="dot"></div><p>En attente d\'analyse<span class="sub">Lance la caméra pour commencer</span></p>';
+  document.getElementById('lod-instruction-text').textContent = 'Démarre la caméra';
+  document.getElementById('lod-instruction-sub').textContent = "pour commencer l'exercice";
+  setLodStatus('idle','En attente');
+  if(creativeActive) toggleCreativeSession(); // auto-stop session if camera stops
 }
 
 btnStart.addEventListener('click', startCamera);
@@ -464,11 +648,10 @@ function resizeCanvas(){
   canvas.height = rect.height;
 }
 
-/* ---------- MATH HELPERS ---------- */
+/* ---------- math helpers ---------- */
 function dist(a,b){ return Math.hypot(a.x-b.x, a.y-b.y); }
 function mid(a,b){ return {x:(a.x+b.x)/2, y:(a.y+b.y)/2}; }
 function angleAt(a,b,c){
-  // angle at point b, formed by a-b-c, in degrees
   const v1 = {x:a.x-b.x, y:a.y-b.y};
   const v2 = {x:c.x-b.x, y:c.y-b.y};
   const dot = v1.x*v2.x + v1.y*v2.y;
@@ -479,15 +662,12 @@ function angleAt(a,b,c){
   return Math.acos(cos) * 180/Math.PI;
 }
 function angleFromVertical(p1,p2){
-  // angle of vector p1->p2 relative to vertical axis (0 = perfectly vertical)
   const dx = p2.x-p1.x, dy = p2.y-p1.y;
-  const angle = Math.atan2(Math.abs(dx), Math.abs(dy)) * 180/Math.PI;
-  return angle;
+  return Math.atan2(Math.abs(dx), Math.abs(dy)) * 180/Math.PI;
 }
 function lineAngle(p1,p2){
   return Math.atan2(p2.y-p1.y, p2.x-p1.x) * 180/Math.PI;
 }
-
 function setDial(id,valueId,deg,pct,status){
   const dial = document.getElementById(id);
   const val = document.getElementById(valueId);
@@ -496,23 +676,32 @@ function setDial(id,valueId,deg,pct,status){
   dial.style.setProperty('--dc', color);
   val.textContent = Math.round(deg) + '°';
 }
+function updateFeedback(status,msg,sub){
+  feedback.className = 'feedback-banner status-'+status;
+  feedback.innerHTML = '<div class="dot"></div><p>'+msg+'<span class="sub">'+sub+'</span></p>';
+}
 
-/* ---------- DETECTION LOOP ---------- */
+/* =========================================================
+   DETECTION LOOP — computes core metrics once per frame,
+   then feeds whichever mode is currently active.
+   ========================================================= */
 function loop(){
   if(!running) return;
   if(video.currentTime !== lastVideoTime){
     lastVideoTime = video.currentTime;
     const result = poseLandmarker.detectForVideo(video, performance.now());
-    draw(result);
+    processFrame(result);
   }
   rafId = requestAnimationFrame(loop);
 }
 
-function draw(result){
+let lastMetrics = null; // shared metrics snapshot, read by creative sampler
+
+function processFrame(result){
   ctx.clearRect(0,0,canvas.width,canvas.height);
   const lm = result.landmarks && result.landmarks[0];
   if(!lm){
-    updateFeedback('warn','Corps non détecté','Recule-toi ou améliore la lumière');
+    if(currentMode==='cadre') updateFeedback('warn','Corps non détecté','Recule-toi ou améliore la lumière');
     return;
   }
 
@@ -520,34 +709,31 @@ function draw(result){
   const pt = i => ({x: lm[i].x*W, y: lm[i].y*H});
 
   const shL = pt(11), shR = pt(12), elL = pt(13), elR = pt(14), wrL = pt(15), wrR = pt(16);
-  const hipL = pt(23), hipR = pt(24), nose = pt(0);
+  const hipL = pt(23), hipR = pt(24);
   const shMid = mid(shL,shR), hipMid = mid(hipL,hipR);
   const torso = dist(shMid,hipMid) || 1;
 
-  /* ---- metric 1 & 2: arm height (shoulder vs wrist) ---- */
   function armStatus(sh, wr, elbow, label, dialId, valId){
-    const heightDiff = (wr.y - sh.y) / torso; // positive = wrist below shoulder
-    let status, pct, msg=null;
+    const heightDiff = (wr.y - sh.y) / torso;
+    let status, msg=null;
     if(heightDiff > 0.55){ status='bad'; msg = 'Bras '+label+' trop bas'; }
     else if(heightDiff > 0.35){ status='warn'; msg = 'Bras '+label+' un peu bas'; }
     else if(heightDiff < -0.15){ status='bad'; msg = 'Bras '+label+' trop haut'; }
     else { status='good'; }
-    pct = Math.max(0, 100 - Math.abs(heightDiff-0.15)*140);
-    setDial(dialId, valId, angleAt(sh,elbow,wr), pct, status);
+    const pct = Math.max(0, 100 - Math.abs(heightDiff-0.15)*140);
+    if(currentMode==='cadre') setDial(dialId, valId, angleAt(sh,elbow,wr), pct, status);
     return {status, msg, heightDiff};
   }
   const armLres = armStatus(shL, wrL, elL, 'gauche', 'dial-arml', 'val-arml');
   const armRres = armStatus(shR, wrR, elR, 'droit', 'dial-armr', 'val-armr');
 
-  /* ---- metric 3: back alignment ---- */
   const backDev = angleFromVertical(hipMid, shMid);
   let backStatus, backMsg=null;
   if(backDev > 16){ backStatus='bad'; backMsg='Dos pas assez droit, redresse-toi'; }
   else if(backDev > 8){ backStatus='warn'; backMsg='Dos légèrement penché'; }
   else backStatus='good';
-  setDial('dial-back','val-back', backDev, 100 - backDev*4, backStatus);
+  if(currentMode==='cadre') setDial('dial-back','val-back', backDev, 100 - backDev*4, backStatus);
 
-  /* ---- metric 4: shoulder/hip rotation (torsion) ---- */
   const shAngle = lineAngle(shL,shR);
   const hipAngle = lineAngle(hipL,hipR);
   let torsion = Math.abs(shAngle - hipAngle);
@@ -556,23 +742,33 @@ function draw(result){
   if(torsion > 20){ rotStatus='bad'; rotMsg='Cadre qui tourne, stabilise épaules et bassin'; }
   else if(torsion > 10){ rotStatus='warn'; rotMsg='Légère torsion du buste'; }
   else rotStatus='good';
-  setDial('dial-rot','val-rot', torsion, 100 - torsion*4, rotStatus);
+  if(currentMode==='cadre') setDial('dial-rot','val-rot', torsion, 100 - torsion*4, rotStatus);
 
-  /* ---- overall feedback: worst status wins ---- */
-  const issues = [armLres, armRres, {status:backStatus,msg:backMsg}, {status:rotStatus,msg:rotMsg}]
-    .filter(i => i.msg);
-  const bad = issues.find(i=>i.status==='bad');
-  const warn = issues.find(i=>i.status==='warn');
-  if(bad) updateFeedback('bad', bad.msg, 'Corrige et regarde le cadran concerné');
-  else if(warn) updateFeedback('warn', warn.msg, 'Presque parfait, ajuste légèrement');
-  else updateFeedback('good', 'Cadre solide, continue comme ça', 'Bras, dos et rotation sont alignés');
+  lastMetrics = {
+    armL: armLres.heightDiff, armR: armRres.heightDiff,
+    back: backDev, torsion: torsion,
+    hipMidXNorm: 1 - (hipMid.x / W) /* mirrored to match on-screen left/right, since video is CSS-flipped */
+  };
 
-  /* ---- draw skeleton ---- */
+  if(currentMode==='cadre'){
+    const issues = [armLres, armRres, {status:backStatus,msg:backMsg}, {status:rotStatus,msg:rotMsg}].filter(i=>i.msg);
+    const bad = issues.find(i=>i.status==='bad');
+    const warnI = issues.find(i=>i.status==='warn');
+    if(bad) updateFeedback('bad', bad.msg, 'Corrige et regarde le cadran concerné');
+    else if(warnI) updateFeedback('warn', warnI.msg, 'Presque parfait, ajuste légèrement');
+    else updateFeedback('good', 'Cadre solide, continue comme ça', 'Bras, dos et rotation sont alignés');
+  }
+
+  if(currentMode==='lod'){
+    lodTrackPosition(lastMetrics.hipMidXNorm);
+  }
+
+  /* ---- draw skeleton (always, while any camera mode active) ---- */
   ctx.lineWidth = 3;
   ctx.lineCap = 'round';
   CONNECTIONS.forEach(([a,b])=>{
     const p1 = pt(a), p2 = pt(b);
-    let color = 'rgba(237,239,242,0.55)';
+    let color = 'rgba(243,241,248,0.5)';
     if((a===11&&b===13)||(a===13&&b===15)) color = armLres.status==='good' ? '#3DFFC0' : armLres.status==='warn' ? '#FFB84D' : '#FF5C6C';
     if((a===12&&b===14)||(a===14&&b===16)) color = armRres.status==='good' ? '#3DFFC0' : armRres.status==='warn' ? '#FFB84D' : '#FF5C6C';
     if((a===11&&b===23)||(a===12&&b===24)) color = backStatus==='good' ? '#3DFFC0' : backStatus==='warn' ? '#FFB84D' : '#FF5C6C';
@@ -583,14 +779,187 @@ function draw(result){
   [11,12,13,14,15,16,23,24,0].forEach(i=>{
     const p = pt(i);
     ctx.beginPath(); ctx.arc(p.x,p.y,4,0,Math.PI*2);
-    ctx.fillStyle = '#EDEFF2'; ctx.fill();
+    ctx.fillStyle = '#F3F1F8'; ctx.fill();
   });
 }
 
-function updateFeedback(status,msg,sub){
-  feedback.className = 'feedback-banner status-'+status;
-  feedback.innerHTML = '<div class="dot"></div><p>'+msg+'<span class="sub">'+sub+'</span></p>';
+/* =========================================================
+   LIGNE DE DANSE — exercise logic
+   ========================================================= */
+const LOD_WINDOW_MS = 3200;
+const LOD_MOVE_THRESH = 0.045;   // normalized horizontal displacement to count as "moved"
+const LOD_ACTIVITY_THRESH = 0.02; // min cumulative movement to avoid "blocked" verdict
+
+const lodInstructionText = document.getElementById('lod-instruction-text');
+const lodInstructionSub = document.getElementById('lod-instruction-sub');
+const lodArrowSvg = document.getElementById('lod-arrow-svg');
+const lodStatusEl = document.getElementById('lod-status');
+const lodScoreVal = document.getElementById('lod-score-val');
+const lodStatsEl = document.getElementById('lod-stats');
+
+let lodInstruction = 'droite'; // 'droite' | 'gauche' | 'flux'
+let lodWindowStart = null;
+let lodWindowSamples = [];
+let lodTotal = 0, lodCorrect = 0;
+let lodTimer = null;
+
+function lodSetInstruction(kind){
+  lodInstruction = kind;
+  if(kind==='droite'){
+    lodInstructionText.textContent = 'AVANCE À DROITE';
+    lodInstructionSub.textContent = 'suis le sens de la ligne de danse';
+    lodArrowSvg.innerHTML = '<path d="M4 12h16M14 6l6 6-6 6"/>';
+    lodArrowSvg.parentElement.style.transform = 'rotate(0deg)';
+  } else if(kind==='gauche'){
+    lodInstructionText.textContent = 'AVANCE À GAUCHE';
+    lodInstructionSub.textContent = 'suis le sens de la ligne de danse';
+    lodArrowSvg.innerHTML = '<path d="M4 12h16M14 6l6 6-6 6"/>';
+    lodArrowSvg.parentElement.style.transform = 'rotate(180deg)';
+  } else {
+    lodInstructionText.textContent = 'NE BLOQUE PAS LE FLUX';
+    lodInstructionSub.textContent = 'petits déplacements, ne reste pas figé';
+    lodArrowSvg.innerHTML = '<circle cx="12" cy="12" r="7"/>';
+    lodArrowSvg.parentElement.style.transform = 'rotate(0deg)';
+  }
 }
+function setLodStatus(kind,text){
+  lodStatusEl.className = 'lod-status-pill' + (kind==='ok'?' ok':kind==='fail'?' fail':'');
+  lodStatusEl.textContent = text;
+}
+function lodResetWindow(){
+  lodWindowStart = performance.now();
+  lodWindowSamples = [];
+  const options = ['droite','gauche','flux'];
+  const next = options[Math.floor(Math.random()*options.length)];
+  lodSetInstruction(next);
+  setLodStatus('idle','Analyse en cours…');
+}
+function lodTrackPosition(xNorm){
+  if(lodWindowStart===null) lodResetWindow();
+  lodWindowSamples.push(xNorm);
+  const elapsed = performance.now() - lodWindowStart;
+  if(elapsed >= LOD_WINDOW_MS && lodWindowSamples.length >= 5){
+    lodEvaluateWindow();
+  }
+}
+function lodEvaluateWindow(){
+  const first = lodWindowSamples[0];
+  const last = lodWindowSamples[lodWindowSamples.length-1];
+  const net = last - first; // screen-space; camera is mirrored via CSS so this matches visual left/right
+  let cumulative = 0;
+  for(let i=1;i<lodWindowSamples.length;i++) cumulative += Math.abs(lodWindowSamples[i]-lodWindowSamples[i-1]);
+
+  let ok = false, resultText = '';
+  if(lodInstruction==='droite'){
+    if(net > LOD_MOVE_THRESH){ ok=true; resultText='Bon sens !'; }
+    else if(net < -LOD_MOVE_THRESH){ resultText='Contre-sens !'; }
+    else resultText='Pas assez de déplacement';
+  } else if(lodInstruction==='gauche'){
+    if(net < -LOD_MOVE_THRESH){ ok=true; resultText='Bon sens !'; }
+    else if(net > LOD_MOVE_THRESH){ resultText='Contre-sens !'; }
+    else resultText='Pas assez de déplacement';
+  } else {
+    if(cumulative > LOD_ACTIVITY_THRESH){ ok=true; resultText='Flux fluide'; }
+    else resultText='Bloqué·e — bouge un peu';
+  }
+
+  lodTotal++; if(ok) lodCorrect++;
+  setLodStatus(ok?'ok':'fail', resultText);
+  lodScoreVal.textContent = Math.round((lodCorrect/lodTotal)*100) + '%';
+  lodStatsEl.textContent = lodCorrect + ' / ' + lodTotal + ' séquences réussies';
+
+  lodResetWindow();
+}
+document.getElementById('btn-lod-reset').addEventListener('click', ()=>{
+  lodTotal = 0; lodCorrect = 0;
+  lodScoreVal.textContent = '--%';
+  lodStatsEl.textContent = '0 / 0 séquences réussies';
+  lodResetWindow();
+});
+
+/* =========================================================
+   CRÉATIVITÉ — movement diversity index
+   ========================================================= */
+const btnCreativeToggle = document.getElementById('btn-creative-toggle');
+const creativeTimerEl = document.getElementById('creative-timer');
+const creativeSamplesEl = document.getElementById('creative-samples');
+const diversityResult = document.getElementById('diversity-result');
+const diversityScoreEl = document.getElementById('diversity-score');
+const diversityBreakdownEl = document.getElementById('diversity-breakdown');
+
+let creativeActive = false;
+let creativeStartTime = null;
+let creativeSampleTimer = null;
+let creativeData = { armL:[], armR:[], back:[], torsion:[] };
+let creativeClockTimer = null;
+
+function toggleCreativeSession(){
+  if(!creativeActive){
+    if(!running){ alert('Démarre la caméra pour lancer une session.'); return; }
+    creativeActive = true;
+    creativeStartTime = performance.now();
+    creativeData = { armL:[], armR:[], back:[], torsion:[] };
+    diversityResult.classList.remove('show');
+    btnCreativeToggle.textContent = 'Terminer la session';
+    creativeSampleTimer = setInterval(()=>{
+      if(lastMetrics){
+        creativeData.armL.push(lastMetrics.armL);
+        creativeData.armR.push(lastMetrics.armR);
+        creativeData.back.push(lastMetrics.back);
+        creativeData.torsion.push(lastMetrics.torsion);
+        creativeSamplesEl.textContent = creativeData.armL.length + ' mesures enregistrées';
+      }
+    }, 500);
+    creativeClockTimer = setInterval(()=>{
+      const s = Math.floor((performance.now()-creativeStartTime)/1000);
+      const mm = String(Math.floor(s/60)).padStart(2,'0');
+      const ss = String(s%60).padStart(2,'0');
+      creativeTimerEl.textContent = mm+':'+ss;
+    }, 250);
+  } else {
+    creativeActive = false;
+    clearInterval(creativeSampleTimer);
+    clearInterval(creativeClockTimer);
+    btnCreativeToggle.textContent = 'Démarrer la session';
+    computeDiversity();
+  }
+}
+btnCreativeToggle.addEventListener('click', toggleCreativeSession);
+
+function stdev(arr){
+  if(arr.length < 2) return 0;
+  const m = arr.reduce((a,b)=>a+b,0)/arr.length;
+  const variance = arr.reduce((a,b)=>a+(b-m)*(b-m),0)/arr.length;
+  return Math.sqrt(variance);
+}
+function computeDiversity(){
+  const n = creativeData.armL.length;
+  if(n < 6){
+    diversityResult.classList.add('show');
+    diversityScoreEl.textContent = '—';
+    diversityBreakdownEl.innerHTML = '<p style="color:var(--text-muted); font-size:12.5px; text-align:center;">Session trop courte — danse au moins 10 secondes pour obtenir un indice fiable.</p>';
+    return;
+  }
+  // normalize each metric's stdev against a plausible max variation to get 0-100 sub-scores
+  const subs = {
+    'Bras (amplitude)': Math.min(100, (stdev(creativeData.armL.concat(creativeData.armR)) / 0.35) * 100),
+    'Dos (inclinaison)': Math.min(100, (stdev(creativeData.back) / 12) * 100),
+    'Rotation buste/bassin': Math.min(100, (stdev(creativeData.torsion) / 15) * 100)
+  };
+  const values = Object.values(subs);
+  const overall = Math.round(values.reduce((a,b)=>a+b,0)/values.length);
+
+  diversityResult.classList.add('show');
+  diversityScoreEl.textContent = overall + '%';
+  diversityBreakdownEl.innerHTML = Object.entries(subs).map(([label,val])=>{
+    const v = Math.round(val);
+    return '<div class="breakdown-row"><div class="b-label">'+label+'</div><div class="b-track"><div class="b-fill" style="width:'+v+'%"></div></div><div class="b-val">'+v+'%</div></div>';
+  }).join('');
+}
+
+/* init default instruction text before first camera start */
+lodSetInstruction('droite');
+switchTo('cadre');
 </script>
 </body>
 </html>
