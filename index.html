@@ -1,965 +1,628 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="fr">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#0A0B14">
-<title>FrameCheck — Miroir IA de posture Kizomba</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b1020">
+<meta name="description" content="FrameCheck accompagne l'entraînement Kizomba avec des observations visuelles réalisées localement dans le navigateur.">
+<title>FrameCheck — Entraînement Kizomba</title>
 <link rel="manifest" href="manifest.json">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
-  :root{
-    --bg:#0A0B14;
-    --surface:#141625;
-    --surface-2:#1E2036;
-    --line:#2C2E48;
-    --text:#F3F1F8;
-    --text-muted:#8D8AA8;
-    --good:#3DFFC0;
-    --good-dim:#0F3329;
-    --bad:#FF5C6C;
-    --bad-dim:#331419;
-    --warn:#FFB84D;
-    --warn-dim:#332310;
-    --pop:#FF3DA6;
-    --pop2:#7C5CFF;
-    --safe-top: env(safe-area-inset-top, 0px);
-    --safe-bottom: env(safe-area-inset-bottom, 0px);
-  }
-  *{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
-  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;overscroll-behavior:none;}
-  body{min-height:100vh; min-height:100dvh; display:flex; flex-direction:column;}
-
-  /* ---------- HEADER ---------- */
-  header{
-    padding:calc(14px + var(--safe-top)) 18px 12px;
-    display:flex; align-items:center; gap:12px;
-    border-bottom:1px solid var(--line);
-    background:
-      radial-gradient(120% 180% at 0% -20%, rgba(124,92,255,0.25), transparent 55%),
-      radial-gradient(120% 180% at 100% 120%, rgba(255,61,166,0.18), transparent 55%),
-      var(--bg);
-    position:relative; z-index:5; overflow:hidden;
-  }
-  .mark{
-    width:36px;height:36px;border-radius:50%;
-    background: conic-gradient(from 0deg, var(--good), var(--pop2) 35%, var(--pop) 65%, var(--good) 100%);
-    position:relative; flex-shrink:0;
-    animation: spin 4s linear infinite;
-    box-shadow:0 0 16px -2px rgba(61,255,192,0.5);
-  }
-  .mark::after{
-    content:''; position:absolute; inset:6px; background:var(--bg); border-radius:50%;
-  }
-  @keyframes spin{to{transform:rotate(360deg);}}
-  .wordmark{display:flex; flex-direction:column; line-height:1.1;}
-  .wordmark b{font-family:'Unbounded',sans-serif; font-size:15px; font-weight:700; letter-spacing:0.02em;}
-  .wordmark span{font-family:'JetBrains Mono',monospace; font-size:9.5px; color:var(--text-muted); letter-spacing:0.08em; text-transform:uppercase; margin-top:2px;}
-
-  /* ---------- TABS ---------- */
-  nav.tabs{
-    display:flex; gap:0; padding:0 6px; background:var(--bg);
-    border-bottom:1px solid var(--line); position:relative; z-index:5;
-    overflow-x:auto; scrollbar-width:none;
-  }
-  nav.tabs::-webkit-scrollbar{display:none;}
-  nav.tabs button{
-    flex:1 0 auto; min-width:88px; background:none; border:none; color:var(--text-muted);
-    font-family:'Inter',sans-serif; font-weight:600; font-size:12.5px;
-    padding:13px 10px; cursor:pointer; position:relative;
-    letter-spacing:0.01em; white-space:nowrap;
-  }
-  nav.tabs button.active{color:var(--text);}
-  nav.tabs button.active::after{
-    content:''; position:absolute; left:16%; right:16%; bottom:-1px; height:2px;
-    background:linear-gradient(90deg, var(--good), var(--pop2)); border-radius:2px;
-  }
-
-  main{flex:1; position:relative; overflow-y:auto; overflow-x:hidden;}
-  .view{display:none; padding-bottom:calc(24px + var(--safe-bottom));}
-  .view.active{display:block;}
-  .mode-panel{display:none;}
-  .mode-panel.active{display:block;}
-
-  /* ---------- CAMERA STAGE (shared across Cadre / LOD / Créativité) ---------- */
-  #camera-stage{display:none;}
-  #camera-stage.active{display:block;}
-  .cam-wrap{
-    position:relative; width:100%; aspect-ratio:3/4; background:#000;
-    overflow:hidden; border-bottom:1px solid var(--line);
-  }
-  .cam-wrap video, .cam-wrap canvas{
-    position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
-    transform:scaleX(-1);
-  }
-  .cam-wrap video{opacity:0.001;}
-
-  .cam-placeholder{
-    position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
-    gap:14px; text-align:center; padding:0 30px; color:var(--text-muted);
-    background:
-      radial-gradient(60% 45% at 22% 20%, rgba(124,92,255,0.28), transparent 60%),
-      radial-gradient(55% 40% at 80% 78%, rgba(255,61,166,0.22), transparent 60%),
-      radial-gradient(70% 55% at 50% 50%, rgba(61,255,192,0.10), transparent 65%),
-      #05060B;
-    background-size:200% 200%;
-    animation: aura 10s ease-in-out infinite;
-  }
-  @keyframes aura{
-    0%{background-position:0% 30%;}
-    50%{background-position:100% 70%;}
-    100%{background-position:0% 30%;}
-  }
-  .cam-placeholder .scan-icon{
-    width:68px;height:68px;border-radius:50%; border:2px solid var(--line);
-    position:relative; display:flex; align-items:center; justify-content:center;
-    background:rgba(20,22,37,0.6); backdrop-filter:blur(2px);
-  }
-  .cam-placeholder .scan-icon::before{
-    content:''; position:absolute; inset:-3px; border-radius:50%;
-    border:2.5px solid transparent; border-top-color:var(--good); border-right-color:var(--pop2);
-    animation:spin 1.4s linear infinite;
-    filter:drop-shadow(0 0 6px rgba(61,255,192,0.6));
-  }
-  .cam-placeholder .scan-icon svg{width:28px;height:28px; fill:none; stroke:var(--text); stroke-width:1.6;}
-  .cam-placeholder p{font-size:13px; line-height:1.5; margin:0; position:relative;}
-  .cam-placeholder .err{color:var(--bad); font-family:'JetBrains Mono',monospace; font-size:11px;}
-
-  .btn{
-    font-family:'Inter',sans-serif; font-weight:700; font-size:14px;
-    border:none; border-radius:12px; padding:13px 20px; cursor:pointer;
-    display:inline-flex; align-items:center; justify-content:center; gap:8px;
-  }
-  .btn-primary{
-    background:linear-gradient(120deg, var(--good), #6DFFDA 50%, var(--good));
-    color:#06140F;
-    box-shadow:0 0 24px -4px rgba(61,255,192,0.65);
-  }
-  .btn-pop{
-    background:linear-gradient(120deg, var(--pop), var(--pop2));
-    color:#fff;
-    box-shadow:0 0 24px -4px rgba(255,61,166,0.55);
-  }
-  .btn-ghost{background:var(--surface-2); color:var(--text); border:1px solid var(--line);}
-  .btn:active{transform:scale(0.97);}
-  .btn:disabled{opacity:0.5;}
-
-  .feedback-banner{
-    margin:14px 16px 0; padding:14px 16px; border-radius:14px;
-    display:flex; align-items:center; gap:12px;
-    border:1px solid var(--line); background:var(--surface);
-    transition:background .25s, border-color .25s;
-  }
-  .feedback-banner .dot{width:10px;height:10px;border-radius:50%; flex-shrink:0; background:var(--text-muted);}
-  .feedback-banner.status-good{background:var(--good-dim); border-color:#1E5C46;}
-  .feedback-banner.status-good .dot{background:var(--good);}
-  .feedback-banner.status-warn{background:var(--warn-dim); border-color:#6B4E1E;}
-  .feedback-banner.status-warn .dot{background:var(--warn);}
-  .feedback-banner.status-bad{background:var(--bad-dim); border-color:#6B2530;}
-  .feedback-banner.status-bad .dot{background:var(--bad);}
-  .feedback-banner p{margin:0; font-size:14.5px; font-weight:600; line-height:1.35;}
-  .feedback-banner span.sub{display:block; font-family:'JetBrains Mono',monospace; font-size:10.5px; color:var(--text-muted); font-weight:400; margin-top:3px; text-transform:none;}
-
-  .controls-row{display:flex; gap:10px; padding:14px 16px 6px;}
-  .controls-row .btn{flex:1;}
-
-  /* ---------- CADRE GAUGES ---------- */
-  .gauges{
-    display:grid; grid-template-columns:repeat(4,1fr); gap:8px;
-    padding:12px 16px 4px;
-  }
-  .gauge{display:flex; flex-direction:column; align-items:center; gap:6px;}
-  .dial{
-    width:56px;height:56px;border-radius:50%;
-    background:conic-gradient(var(--dc,var(--text-muted)) calc(var(--pct,0)*1%), var(--surface-2) 0);
-    display:flex; align-items:center; justify-content:center;
-    transition:background .3s ease, box-shadow .3s ease;
-    box-shadow:0 0 14px -3px var(--dc, transparent);
-  }
-  .dial-inner{
-    width:44px;height:44px;border-radius:50%;background:var(--surface);
-    display:flex; align-items:center; justify-content:center;
-    font-family:'JetBrains Mono',monospace; font-size:10.5px; font-weight:700; color:var(--text);
-  }
-  .gauge label{font-size:9.5px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.06em; text-align:center;}
-
-  .info-block{margin:16px; padding:14px 16px; background:var(--surface); border:1px solid var(--line); border-radius:14px;}
-  .info-block h3{margin:0 0 8px; font-size:12px; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-muted); font-weight:600;}
-  .info-block p{margin:0; font-size:12.5px; line-height:1.55; color:var(--text-muted);}
-
-  /* ---------- LIGNE DE DANSE (exercise) ---------- */
-  .lod-panel{padding:0 16px;}
-  .lod-instruction{
-    margin-top:14px; padding:20px 16px; border-radius:16px; text-align:center;
-    background:var(--surface); border:1px solid var(--line);
-    display:flex; flex-direction:column; align-items:center; gap:8px;
-  }
-  .lod-arrow{
-    width:52px;height:52px; display:flex; align-items:center; justify-content:center;
-    border-radius:50%; background:var(--surface-2);
-    transition:transform .3s ease;
-  }
-  .lod-arrow svg{width:26px;height:26px; fill:none; stroke:var(--pop2); stroke-width:2.2;}
-  .lod-instruction h2{font-family:'Unbounded',sans-serif; font-size:17px; margin:4px 0 0;}
-  .lod-instruction span{font-family:'JetBrains Mono',monospace; font-size:10.5px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em;}
-
-  .lod-status-pill{
-    margin:12px auto 0; padding:7px 16px; border-radius:20px; width:fit-content;
-    font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em;
-    background:var(--surface-2); color:var(--text-muted); border:1px solid var(--line);
-  }
-  .lod-status-pill.ok{background:var(--good-dim); color:var(--good); border-color:#1E5C46;}
-  .lod-status-pill.fail{background:var(--bad-dim); color:var(--bad); border-color:#6B2530;}
-
-  .lod-score{
-    margin:16px 0 4px; display:flex; align-items:center; justify-content:space-between;
-    padding:16px; background:var(--surface); border:1px solid var(--line); border-radius:14px;
-  }
-  .lod-score .big{font-family:'Unbounded',sans-serif; font-size:30px; font-weight:700; color:var(--pop2);}
-  .lod-score .lbl{font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em;}
-  .lod-score .stats{text-align:right; font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text-muted); line-height:1.6;}
-
-  /* ---------- CRÉATIVITÉ (movement diversity) ---------- */
-  .creative-panel{padding:0 16px;}
-  .creative-hero{
-    margin-top:14px; padding:18px 16px; border-radius:16px; text-align:center;
-    background:var(--surface); border:1px solid var(--line);
-  }
-  .creative-hero h2{font-family:'Unbounded',sans-serif; font-size:16px; margin:0 0 8px;}
-  .creative-hero p{font-size:12.5px; color:var(--text-muted); margin:0; line-height:1.5;}
-  .creative-timer{
-    font-family:'JetBrains Mono',monospace; font-size:26px; font-weight:700; margin:14px 0 4px;
-    color:var(--pop);
-  }
-  .creative-samples{font-family:'JetBrains Mono',monospace; font-size:10.5px; color:var(--text-muted);}
-
-  .diversity-result{display:none; margin-top:14px;}
-  .diversity-result.show{display:block;}
-  .diversity-score-card{
-    padding:22px 16px; border-radius:16px; text-align:center;
-    background:linear-gradient(160deg, rgba(255,61,166,0.14), rgba(124,92,255,0.14)), var(--surface);
-    border:1px solid var(--line);
-  }
-  .diversity-score-card .score{font-family:'Unbounded',sans-serif; font-size:44px; font-weight:800;
-    background:linear-gradient(90deg, var(--good), var(--pop2)); -webkit-background-clip:text; background-clip:text; color:transparent;}
-  .diversity-score-card .score-lbl{font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.06em; margin-top:2px;}
-  .breakdown{display:flex; flex-direction:column; gap:8px; margin-top:14px;}
-  .breakdown-row{display:flex; align-items:center; gap:10px;}
-  .breakdown-row .b-label{font-size:11.5px; color:var(--text-muted); width:96px; flex-shrink:0;}
-  .breakdown-row .b-track{flex:1; height:6px; border-radius:4px; background:var(--surface-2); overflow:hidden;}
-  .breakdown-row .b-fill{height:100%; border-radius:4px; background:linear-gradient(90deg, var(--good), var(--pop2));}
-  .breakdown-row .b-val{font-family:'JetBrains Mono',monospace; font-size:10.5px; color:var(--text-muted); width:32px; text-align:right;}
-
-  /* ---------- LE BAL ---------- */
-  #view-bal{padding:18px 16px 8px;}
-  .bal-hero{text-align:center; margin-bottom:18px;}
-  .bal-hero h2{font-family:'Unbounded',sans-serif; font-size:19px; margin:0 0 6px; font-weight:700;}
-  .bal-hero p{font-size:13px; color:var(--text-muted); margin:0; line-height:1.5;}
-
-  .floor-wrap{display:flex; justify-content:center; margin:20px 0 24px;}
-  .floor{
-    width:230px; height:230px; border-radius:50%;
-    border:2px dashed var(--pop2); position:relative;
-    display:flex; align-items:center; justify-content:center;
-    box-shadow:0 0 40px -12px rgba(124,92,255,0.5);
-  }
-  .floor::before{
-    content:''; position:absolute; inset:34px; border-radius:50%;
-    border:1px solid var(--line);
-  }
-  .floor .center-label{font-family:'JetBrains Mono',monospace; font-size:9.5px; color:var(--text-muted); text-align:center; line-height:1.6; text-transform:uppercase; letter-spacing:0.04em;}
-  .floor .runner{
-    position:absolute; width:13px; height:13px; border-radius:50%;
-    background:radial-gradient(circle at 35% 30%, #B6FFEA, var(--good));
-    top:50%; left:50%; margin:-6.5px 0 0 -6.5px;
-    box-shadow:0 0 18px 3px rgba(61,255,192,0.75);
-    animation:orbit 6s linear infinite;
-    transform-origin:6.5px 6.5px;
-  }
-  @keyframes orbit{
-    from{ transform: rotate(0deg) translate(97px) rotate(0deg); }
-    to{ transform: rotate(-360deg) translate(97px) rotate(360deg); }
-  }
-  .floor .arrow{
-    position:absolute; width:0; height:0;
-    border-left:5px solid transparent; border-right:5px solid transparent; border-bottom:8px solid var(--pop);
-    top:12px; left:50%; margin-left:-5px; transform:rotate(90deg);
-    filter:drop-shadow(0 0 6px rgba(255,61,166,0.8));
-  }
-
-  .rule-cards{display:flex; flex-direction:column; gap:10px;}
-  .rule-card{
-    display:flex; gap:12px; padding:14px; background:var(--surface); border:1px solid var(--line); border-radius:14px;
-  }
-  .rule-card .num{
-    font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--good);
-    width:26px; height:26px; border-radius:50%; background:var(--good-dim);
-    display:flex; align-items:center; justify-content:center; flex-shrink:0; font-weight:700;
-  }
-  .rule-card h4{margin:0 0 3px; font-size:13.5px; font-weight:700;}
-  .rule-card p{margin:0; font-size:12px; color:var(--text-muted); line-height:1.5;}
-
-  .toggle-legend{display:flex; justify-content:center; gap:16px; margin-top:2px; margin-bottom:6px;}
-  .toggle-legend span{font-size:10.5px; color:var(--text-muted); display:flex; align-items:center; gap:5px; font-family:'JetBrains Mono',monospace;}
-  .toggle-legend i{width:8px;height:8px;border-radius:50%; display:inline-block;}
-
-  .cta-inline{margin:16px; text-align:center;}
-  .cta-inline .btn{width:100%;}
+:root{
+  --bg:#0b1020;
+  --panel:#141b2e;
+  --panel2:#1b243b;
+  --line:#2a3552;
+  --text:#f6f7fb;
+  --muted:#b8bfd0;
+  --accent:#58e0b5;
+  --accent-dark:#08271f;
+  --warn:#ffd166;
+  --warn-dark:#33280b;
+  --danger:#ff7b86;
+  --danger-dark:#351519;
+  --safe-top:env(safe-area-inset-top,0px);
+  --safe-bottom:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box}
+html{font-size:16px;background:var(--bg)}
+body{margin:0;min-height:100vh;min-height:100dvh;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+button{font:inherit}
+button:focus-visible,a:focus-visible{outline:3px solid #fff;outline-offset:3px}
+.app{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column}
+.topbar{padding:calc(16px + var(--safe-top)) 18px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;background:rgba(11,16,32,.98)}
+.logo-mark{width:42px;height:42px;border-radius:14px;border:2px solid var(--accent);display:grid;place-items:center;font-weight:900;font-size:20px;color:var(--accent);flex:none}
+.logo-text{font-weight:850;letter-spacing:.06em;font-size:17px}
+.logo-sub{display:block;color:var(--muted);font-size:13px;font-weight:500;letter-spacing:0;margin-top:2px}
+main{flex:1;width:min(100%,720px);margin:0 auto;padding:24px 18px calc(28px + var(--safe-bottom))}
+.screen{display:none}
+.screen.active{display:block}
+.center{text-align:center}
+.eyebrow{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);font-weight:800;margin:0 0 10px}
+h1{font-size:clamp(30px,8vw,46px);line-height:1.05;margin:0 0 16px}
+h2{font-size:clamp(25px,6vw,34px);line-height:1.15;margin:0 0 14px}
+p{font-size:17px;line-height:1.55;margin:0;color:var(--muted)}
+.home-hero{padding:38px 0 18px}
+.home-hero .lead{max-width:530px;margin:0 auto 28px}
+.btn{width:100%;min-height:58px;border:0;border-radius:16px;padding:15px 18px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px}
+.btn-primary{background:var(--accent);color:#071611;font-size:18px}
+.btn-secondary{background:var(--panel2);color:var(--text);border:1px solid var(--line)}
+.btn-text{background:transparent;color:var(--text);min-height:50px;text-decoration:underline;text-underline-offset:4px}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.actions{display:grid;gap:12px;margin-top:22px}
+.note{margin-top:22px;padding:15px 16px;border:1px solid var(--line);border-radius:16px;background:var(--panel);font-size:15px;line-height:1.5;color:var(--muted)}
+.note strong{color:var(--text)}
+.back{display:inline-flex;width:auto;min-height:48px;padding:10px 0;margin-bottom:18px;background:transparent;border:0;color:var(--text);font-weight:750;cursor:pointer}
+.choices{display:grid;gap:12px;margin-top:24px}
+.choice{width:100%;min-height:78px;padding:16px 18px;text-align:left;border:1px solid var(--line);border-radius:18px;background:var(--panel);color:var(--text);display:flex;align-items:center;gap:15px;cursor:pointer}
+.choice .icon{font-size:29px;width:38px;text-align:center;flex:none}
+.choice strong{display:block;font-size:18px}
+.choice span{display:block;color:var(--muted);font-size:14px;margin-top:3px;line-height:1.35}
+.phone-guide{width:170px;height:220px;margin:24px auto;border:5px solid var(--muted);border-radius:28px;position:relative;display:grid;place-items:center;background:linear-gradient(180deg,#151c30,#0e1425)}
+.phone-guide:before{content:"";position:absolute;top:8px;width:46px;height:6px;border-radius:999px;background:var(--muted)}
+.phone-guide .person{font-size:72px;filter:grayscale(1);opacity:.92}
+.guide-list{display:grid;gap:10px;margin:20px 0 0;padding:0;list-style:none}
+.guide-list li{padding:13px 14px;border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--text);font-size:16px;line-height:1.4}
+.privacy{margin-top:18px;padding:14px 15px;border-radius:14px;background:var(--accent-dark);border:1px solid #216b56;color:#dcfff3;font-size:15px;line-height:1.45}
+.camera-shell{margin:-24px -18px 0}
+.cam-wrap{position:relative;width:100%;aspect-ratio:3/4;max-height:68dvh;background:#02040a;overflow:hidden;border-bottom:1px solid var(--line)}
+.cam-wrap video,.cam-wrap canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+.cam-wrap video{opacity:1}
+.cam-wrap canvas{pointer-events:none}
+.cam-status{position:absolute;left:14px;right:14px;top:14px;padding:10px 12px;border-radius:12px;background:rgba(4,8,18,.74);backdrop-filter:blur(8px);font-size:14px;font-weight:750;line-height:1.35}
+.countdown{position:absolute;inset:0;display:none;place-items:center;background:rgba(2,4,10,.48);font-size:clamp(72px,24vw,128px);font-weight:900;text-shadow:0 3px 24px #000}
+.countdown.show{display:grid}
+.camera-body{padding:16px 18px 0}
+.feedback{min-height:78px;border:1px solid var(--line);border-radius:16px;background:var(--panel);padding:16px;display:flex;align-items:center;gap:12px}
+.feedback .symbol{font-size:26px;flex:none}
+.feedback .text{font-size:17px;font-weight:750;line-height:1.35}
+.feedback.good{background:var(--accent-dark);border-color:#216b56}
+.feedback.warn{background:var(--warn-dark);border-color:#7c6222}
+.feedback.danger{background:var(--danger-dark);border-color:#743039}
+.session-label{margin-top:10px;text-align:center;color:var(--muted);font-size:14px}
+.result-card{margin-top:22px;border:1px solid var(--line);border-radius:18px;background:var(--panel);overflow:hidden}
+.result-row{display:flex;justify-content:space-between;align-items:center;gap:18px;padding:17px 16px;border-bottom:1px solid var(--line)}
+.result-row:last-child{border-bottom:0}
+.result-row strong{font-size:17px}
+.result-value{text-align:right;color:var(--accent);font-weight:800;font-size:15px}
+.result-value.watch{color:var(--warn)}
+.result-value.neutral{color:var(--muted)}
+.details{display:none;margin-top:14px;padding:15px 16px;border:1px solid var(--line);border-radius:16px;background:var(--panel);color:var(--muted);font-size:14px;line-height:1.55}
+.details.show{display:block}
+.details p{font-size:14px;margin-bottom:8px}
+.details p:last-child{margin-bottom:0}
+.how-steps{display:grid;gap:13px;margin-top:22px}
+.how-step{display:flex;gap:14px;align-items:flex-start;padding:15px;border:1px solid var(--line);border-radius:16px;background:var(--panel)}
+.how-step b{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;background:var(--accent-dark);color:var(--accent);flex:none}
+.how-step span{color:var(--muted);line-height:1.45;font-size:15px}
+.small{font-size:14px;color:var(--muted);line-height:1.5}
+@media (min-width:600px){main{padding-top:34px}.choices{grid-template-columns:1fr 1fr}.camera-shell{margin-top:-34px}.cam-wrap{border:1px solid var(--line);border-radius:20px}.camera-shell{margin-left:0;margin-right:0}}
+@media (prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
+<div class="app">
+  <header class="topbar" aria-label="FrameCheck">
+    <div class="logo-mark" aria-hidden="true">F</div>
+    <div class="logo-text">FRAMECHECK<span class="logo-sub">Entraînement Kizomba</span></div>
+  </header>
 
-<header>
-  <div class="mark"></div>
-  <div class="wordmark">
-    <b>FRAMECHECK</b>
-    <span>Posture · Ligne de danse · Kizomba</span>
-  </div>
-</header>
-
-<nav class="tabs">
-  <button id="tab-cadre" class="active">Cadre</button>
-  <button id="tab-lod">Ligne de Danse</button>
-  <button id="tab-creative">Créativité</button>
-  <button id="tab-bal">Le Bal</button>
-</nav>
-
-<main>
-
-  <!-- ============ SHARED CAMERA STAGE (Cadre / Ligne de Danse / Créativité) ============ -->
-  <div id="camera-stage">
-    <div class="cam-wrap">
-      <video id="video" playsinline autoplay muted></video>
-      <canvas id="overlay"></canvas>
-      <div id="cam-placeholder" class="cam-placeholder">
-        <div class="scan-icon">
-          <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M4 8V5a1 1 0 011-1h3"/><path d="M20 8V5a1 1 0 00-1-1h-3"/>
-            <path d="M4 16v3a1 1 0 001 1h3"/><path d="M20 16v3a1 1 0 01-1 1h-3"/>
-            <circle cx="12" cy="9.5" r="2.2"/><path d="M8 17c.7-2.2 2.2-3.3 4-3.3s3.3 1.1 4 3.3"/>
-          </svg>
-        </div>
-        <p id="cam-msg">Active la caméra pour commencer.<br>Place ton téléphone face à toi, à hauteur de poitrine.</p>
-        <button id="btn-start" class="btn btn-primary">Démarrer la caméra</button>
-      </div>
-    </div>
-    <div class="controls-row">
-      <button id="btn-stop" class="btn btn-ghost" style="display:none;">Arrêter la caméra</button>
-    </div>
-  </div>
-
-  <!-- ============ CADRE (posture) ============ -->
-  <section id="view-cadre" class="view active">
-    <div class="mode-panel active" id="panel-cadre">
-      <div id="feedback" class="feedback-banner">
-        <div class="dot"></div>
-        <p>En attente d'analyse<span class="sub">Lance la caméra pour commencer</span></p>
-      </div>
-
-      <div class="gauges">
-        <div class="gauge">
-          <div class="dial" id="dial-arml"><div class="dial-inner" id="val-arml">--°</div></div>
-          <label>Bras G</label>
-        </div>
-        <div class="gauge">
-          <div class="dial" id="dial-armr"><div class="dial-inner" id="val-armr">--°</div></div>
-          <label>Bras D</label>
-        </div>
-        <div class="gauge">
-          <div class="dial" id="dial-back"><div class="dial-inner" id="val-back">--°</div></div>
-          <label>Dos</label>
-        </div>
-        <div class="gauge">
-          <div class="dial" id="dial-rot"><div class="dial-inner" id="val-rot">--°</div></div>
-          <label>Rotation</label>
+  <main>
+    <section id="screen-home" class="screen active center" aria-labelledby="home-title">
+      <div class="home-hero">
+        <p class="eyebrow">FrameCheck</p>
+        <h1 id="home-title">Améliorez votre danse grâce à votre caméra.</h1>
+        <p class="lead">Des observations simples pour accompagner votre entraînement, sans remplacer le regard d’un professeur.</p>
+        <div class="actions">
+          <button id="btn-begin" class="btn btn-primary">📷 COMMENCER</button>
+          <button id="btn-how" class="btn btn-text">Comment ça marche ?</button>
         </div>
       </div>
+    </section>
 
-      <div class="info-block">
-        <h3>Comment lire les cadrans</h3>
-        <p>Vert = cadre correct. Orange = attention. Rouge = à corriger. Les seuils sont calibrés pour un cadre kizomba standard — ajuste ta posture selon ton style et ton ressenti, l'IA donne une indication, pas une vérité absolue.</p>
+    <section id="screen-how" class="screen" aria-labelledby="how-title">
+      <button class="back" data-go="home">← Retour</button>
+      <p class="eyebrow">Simple et direct</p>
+      <h2 id="how-title">Comment ça marche ?</h2>
+      <div class="how-steps">
+        <div class="how-step"><b>1</b><span>Choisissez ce que vous souhaitez travailler.</span></div>
+        <div class="how-step"><b>2</b><span>Placez le téléphone pour que votre corps soit visible.</span></div>
+        <div class="how-step"><b>3</b><span>FrameCheck observe certains repères visibles et affiche une indication courte.</span></div>
+        <div class="how-step"><b>4</b><span>À la fin, consultez un résumé de votre session.</span></div>
       </div>
-    </div>
-  </section>
+      <div class="note"><strong>Important :</strong> les mesures restent indicatives. La perspective, la lumière, les vêtements et le placement du téléphone peuvent modifier les résultats. FrameCheck ne remplace pas un professeur.</div>
+    </section>
 
-  <!-- ============ LIGNE DE DANSE (exercise) ============ -->
-  <section id="view-lod" class="view">
-    <div class="mode-panel active" id="panel-lod">
-      <div class="lod-panel">
-        <div class="lod-instruction">
-          <div class="lod-arrow" id="lod-arrow-wrap">
-            <svg id="lod-arrow-svg" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h16M14 6l6 6-6 6"/></svg>
+    <section id="screen-choose" class="screen" aria-labelledby="choose-title">
+      <button class="back" data-go="home">← Retour</button>
+      <p class="eyebrow">Votre entraînement</p>
+      <h2 id="choose-title">Que souhaitez-vous travailler ?</h2>
+      <div class="choices">
+        <button class="choice" data-training="cadre"><span class="icon">🧍</span><span><strong>Cadre</strong><span>Position des bras et relation épaules-bassin.</span></span></button>
+        <button class="choice" data-training="marche"><span class="icon">🚶</span><span><strong>Marche</strong><span>Déplacement visible et continuité du mouvement.</span></span></button>
+        <button class="choice" data-training="posture"><span class="icon">↔️</span><span><strong>Posture</strong><span>Axe du buste et stabilité visible dans l’image.</span></span></button>
+        <button class="choice" data-training="liberte"><span class="icon">✨</span><span><strong>Liberté de mouvement</strong><span>Variété observable des amplitudes et déplacements.</span></span></button>
+      </div>
+    </section>
+
+    <section id="screen-setup" class="screen center" aria-labelledby="setup-title">
+      <button class="back" data-go="choose">← Retour</button>
+      <p class="eyebrow" id="setup-mode">Cadre</p>
+      <h2 id="setup-title">Positionnez votre téléphone.</h2>
+      <div class="phone-guide" aria-hidden="true"><div class="person">🧍</div></div>
+      <ul class="guide-list" aria-label="Conseils de placement">
+        <li id="guide-1">Gardez votre corps visible dans le cadre.</li>
+        <li id="guide-2">Posez le téléphone sur un support stable.</li>
+        <li id="guide-3">Choisissez un endroit suffisamment éclairé.</li>
+      </ul>
+      <div class="privacy">🔒 <strong>Votre vidéo n’est pas envoyée sur nos serveurs.</strong><br>Le traitement de la caméra est réalisé dans votre navigateur. Le modèle MediaPipe est actuellement téléchargé depuis des services externes au démarrage.</div>
+      <div class="actions">
+        <button id="btn-camera" class="btn btn-primary">ACTIVER LA CAMÉRA</button>
+      </div>
+    </section>
+
+    <section id="screen-camera" class="screen" aria-labelledby="camera-title">
+      <div class="camera-shell">
+        <div class="cam-wrap">
+          <video id="video" playsinline autoplay muted aria-label="Aperçu de la caméra"></video>
+          <canvas id="overlay" aria-hidden="true"></canvas>
+          <div id="cam-status" class="cam-status">Préparation de la caméra…</div>
+          <div id="countdown" class="countdown" aria-live="assertive">3</div>
+        </div>
+        <div class="camera-body">
+          <p id="camera-title" class="eyebrow">Analyse en cours</p>
+          <div id="feedback" class="feedback" aria-live="polite">
+            <div class="symbol">👀</div><div class="text">Placez-vous entièrement dans le cadre.</div>
           </div>
-          <h2 id="lod-instruction-text">Démarre la caméra</h2>
-          <span id="lod-instruction-sub">pour commencer l'exercice</span>
-        </div>
-
-        <div id="lod-status" class="lod-status-pill">En attente</div>
-
-        <div class="lod-score">
-          <div>
-            <div class="big" id="lod-score-val">--%</div>
-            <div class="lbl">Fluidité</div>
-          </div>
-          <div class="stats" id="lod-stats">0 / 0 séquences réussies</div>
-        </div>
-
-        <div class="info-block" style="margin:16px 0;">
-          <h3>Principe de l'exercice</h3>
-          <p>Une consigne change toutes les quelques secondes : avance dans le sens indiqué, ou évite de bloquer le flux si aucun sens n'est donné. L'appli suit ton déplacement latéral dans le cadre de la caméra et vérifie que tu ne pars jamais à contre-sens ni ne restes figé.</p>
-        </div>
-
-        <div class="cta-inline">
-          <button id="btn-lod-reset" class="btn btn-ghost" style="width:auto; padding:11px 18px;">Réinitialiser le score</button>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ CRÉATIVITÉ (movement diversity) ============ -->
-  <section id="view-creative" class="view">
-    <div class="mode-panel active" id="panel-creative">
-      <div class="creative-panel">
-        <div class="creative-hero">
-          <h2>Indice de diversité de mouvement</h2>
-          <p>Honnêteté d'abord : l'IA ne juge pas ta créativité artistique. Elle mesure si tes mouvements varient (amplitude des bras, rotations, hauteur) ou si tu répètes la même figure en boucle pendant la session.</p>
-          <div class="creative-timer" id="creative-timer">00:00</div>
-          <div class="creative-samples" id="creative-samples">0 mesures enregistrées</div>
-          <div class="controls-row" style="padding:14px 0 0;">
-            <button id="btn-creative-toggle" class="btn btn-pop">Démarrer la session</button>
-          </div>
-        </div>
-
-        <div id="diversity-result" class="diversity-result">
-          <div class="diversity-score-card">
-            <div class="score" id="diversity-score">--</div>
-            <div class="score-lbl">Indice de diversité</div>
-          </div>
-          <div class="breakdown" id="diversity-breakdown"></div>
-          <div class="info-block">
-            <h3>À lire ainsi</h3>
-            <p>Score élevé = tu as varié hauteur des bras, rotations et posture du dos durant la session. Score bas = mouvements plutôt répétitifs. Ce n'est qu'un indicateur de variété motrice, pas un jugement sur ton style.</p>
+          <div id="session-label" class="session-label">Les observations affichées sont indicatives.</div>
+          <div class="actions">
+            <button id="btn-finish" class="btn btn-primary" disabled>TERMINER LA SESSION</button>
+            <button id="btn-cancel" class="btn btn-secondary">QUITTER</button>
           </div>
         </div>
       </div>
-    </div>
-  </section>
+    </section>
 
-  <!-- ============ LE BAL ============ -->
-  <section id="view-bal" class="view">
-    <div class="bal-hero">
-      <h2>La ligne de danse (LOD)</h2>
-      <p>En société, tous les couples tournent ensemble autour de la piste, dans le même sens. Ton cadre doit rester stable même quand tu te déplaces dans ce flux collectif.</p>
-    </div>
-
-    <div class="floor-wrap">
-      <div class="floor">
-        <div class="arrow"></div>
-        <div class="runner"></div>
-        <div class="center-label">SENS DE<br>ROTATION</div>
+    <section id="screen-result" class="screen" aria-labelledby="result-title">
+      <p class="eyebrow">Résultat</p>
+      <h2 id="result-title">Votre session</h2>
+      <p id="result-intro">Résumé des observations visibles pendant votre entraînement.</p>
+      <div id="result-card" class="result-card"></div>
+      <div class="actions">
+        <button id="btn-restart" class="btn btn-primary">RECOMMENCER</button>
+        <button id="btn-home" class="btn btn-secondary">ACCUEIL</button>
+        <button id="btn-details" class="btn btn-text" aria-expanded="false">Voir les détails</button>
       </div>
-    </div>
-    <div class="toggle-legend">
-      <span><i style="background:var(--good)"></i>Couple en mouvement</span>
-      <span><i style="background:var(--pop)"></i>Sens conventionnel</span>
-    </div>
-
-    <div class="rule-cards">
-      <div class="rule-card">
-        <div class="num">1</div>
-        <div>
-          <h4>Un seul sens, jamais à contre-courant</h4>
-          <p>Tous les couples avancent dans le même sens autour de la piste. Remonter le flux ou reculer à contre-sens crée des collisions et casse l'ambiance du bal.</p>
-        </div>
-      </div>
-      <div class="rule-card">
-        <div class="num">2</div>
-        <div>
-          <h4>Le centre est un couloir de dépassement</h4>
-          <p>Les couples plus lents restent près du bord extérieur, les dépassements se font par l'intérieur de la piste, jamais brusquement.</p>
-        </div>
-      </div>
-      <div class="rule-card">
-        <div class="num">3</div>
-        <div>
-          <h4>Ne bloque pas le flux</h4>
-          <p>Éviter de s'arrêter net dans la ligne de danse. Si tu dois marquer une pause, dégage-toi légèrement vers l'extérieur.</p>
-        </div>
-      </div>
-      <div class="rule-card">
-        <div class="num">4</div>
-        <div>
-          <h4>Cadre stable même en rotation</h4>
-          <p>Un cadre qui se tord ou s'affaisse pendant un tour se ressent immédiatement par ton ou ta partenaire, et perturbe la trajectoire du couple dans le flux.</p>
-        </div>
-      </div>
-      <div class="rule-card">
-        <div class="num">5</div>
-        <div>
-          <h4>Conscience périphérique</h4>
-          <p>Garde un œil (sans quitter ton cadre des yeux) sur les couples autour de toi — anticiper vaut mieux que corriger après coup.</p>
-        </div>
-      </div>
-    </div>
-
-    <div class="cta-inline">
-      <button id="btn-goto-lod" class="btn btn-pop">Essayer l'exercice Ligne de Danse</button>
-    </div>
-  </section>
-
-</main>
+      <div id="details" class="details"></div>
+      <div class="note"><strong>À retenir :</strong> FrameCheck signale des tendances visibles dans l’image. Il ne détermine pas si votre danse est « bonne » ou « mauvaise » et ne remplace jamais un professeur.</div>
+    </section>
+  </main>
+</div>
 
 <script type="module">
 import { PoseLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+import { CadreEngine, angle3D } from "./cadre-engine.mjs";
 
-/* =========================================================
-   TAB NAVIGATION
-   ========================================================= */
-const tabs = {
-  cadre: document.getElementById('tab-cadre'),
-  lod: document.getElementById('tab-lod'),
-  creative: document.getElementById('tab-creative'),
-  bal: document.getElementById('tab-bal')
-};
-const views = {
-  cadre: document.getElementById('view-cadre'),
-  lod: document.getElementById('view-lod'),
-  creative: document.getElementById('view-creative'),
-  bal: document.getElementById('view-bal')
-};
-const cameraStage = document.getElementById('camera-stage');
-const CAMERA_MODES = ['cadre','lod','creative'];
-let currentMode = 'cadre';
-
-function switchTo(mode){
-  currentMode = mode;
-  Object.keys(tabs).forEach(k=>{
-    tabs[k].classList.toggle('active', k===mode);
-    views[k].classList.toggle('active', k===mode);
-  });
-  if(CAMERA_MODES.includes(mode)){
-    cameraStage.classList.add('active');
-    views[mode].prepend(cameraStage);
-    if(mode !== 'cadre') resetCadreUIIfNeeded();
-  } else {
-    cameraStage.classList.remove('active');
-    stopCamera();
-  }
-}
-tabs.cadre.addEventListener('click', ()=>switchTo('cadre'));
-tabs.lod.addEventListener('click', ()=>switchTo('lod'));
-tabs.creative.addEventListener('click', ()=>switchTo('creative'));
-tabs.bal.addEventListener('click', ()=>switchTo('bal'));
-document.getElementById('btn-goto-lod').addEventListener('click', ()=>switchTo('lod'));
-
-function resetCadreUIIfNeeded(){ /* placeholder hook, cadre gauges just stop updating when not active */ }
-
-/* =========================================================
-   CAMERA + POSE MODEL (shared)
-   ========================================================= */
+const screens = [...document.querySelectorAll('.screen')];
 const video = document.getElementById('video');
 const canvas = document.getElementById('overlay');
 const ctx = canvas.getContext('2d');
-const placeholder = document.getElementById('cam-placeholder');
-const camMsg = document.getElementById('cam-msg');
-const btnStart = document.getElementById('btn-start');
-const btnStop = document.getElementById('btn-stop');
+const camStatus = document.getElementById('cam-status');
+const countdown = document.getElementById('countdown');
 const feedback = document.getElementById('feedback');
+const btnCamera = document.getElementById('btn-camera');
+const btnFinish = document.getElementById('btn-finish');
+const details = document.getElementById('details');
+const btnDetails = document.getElementById('btn-details');
+const cadreEngine = new CadreEngine();
 
+const TRAININGS = {
+  cadre: {label:'Cadre'},
+  marche: {label:'Marche'},
+  posture: {label:'Posture'},
+  liberte: {label:'Liberté de mouvement'}
+};
+
+let selectedTraining = 'cadre';
 let poseLandmarker = null;
-let running = false;
 let stream = null;
+let running = false;
+let analysisActive = false;
 let rafId = null;
 let lastVideoTime = -1;
+let lastSampleAt = 0;
+let sessionSamples = [];
+let previousSample = null;
+let smoothed = null;
 
-const CONNECTIONS = [
-  [11,13],[13,15],
-  [12,14],[14,16],
-  [11,12],
-  [23,24],
-  [11,23],[12,24],
-  [23,25],[24,26],
-  [0,11],[0,12]
-];
+function showScreen(name){
+  screens.forEach(s=>s.classList.toggle('active', s.id === `screen-${name}`));
+  window.scrollTo({top:0, behavior:'auto'});
+}
+
+function goHome(){
+  stopCamera();
+  details.classList.remove('show');
+  btnDetails.setAttribute('aria-expanded','false');
+  showScreen('home');
+}
+
+function setTraining(key){
+  selectedTraining = key;
+  document.getElementById('setup-mode').textContent = TRAININGS[key].label;
+  document.getElementById('setup-title').textContent = 'Positionnez votre téléphone.';
+  document.getElementById('camera-title').textContent = TRAININGS[key].label + ' — analyse en cours';
+  const g1=document.getElementById('guide-1'),g2=document.getElementById('guide-2'),g3=document.getElementById('guide-3');
+  if(key==='cadre'){
+    g1.textContent='Cadrez clairement le haut du corps, des épaules jusqu’aux hanches.';
+    g2.textContent='Gardez les deux bras visibles et posez le téléphone sur un support stable.';
+    g3.textContent='Commencez avec votre cadre naturel : FrameCheck l’utilisera comme repère personnel.';
+  }else if(key==='marche'){
+    g1.textContent='Gardez le corps entier visible, y compris les pieds.';
+    g2.textContent='Posez le téléphone sur un support stable et laissez de l’espace pour marcher.';
+    g3.textContent='Choisissez un endroit suffisamment éclairé.';
+  }else{
+    g1.textContent='Gardez votre corps visible dans le cadre.';
+    g2.textContent='Posez le téléphone sur un support stable.';
+    g3.textContent='Choisissez un endroit suffisamment éclairé.';
+  }
+  showScreen('setup');
+}
+
+document.getElementById('btn-begin').addEventListener('click',()=>showScreen('choose'));
+document.getElementById('btn-how').addEventListener('click',()=>showScreen('how'));
+document.querySelectorAll('[data-go]').forEach(btn=>btn.addEventListener('click',()=>showScreen(btn.dataset.go)));
+document.querySelectorAll('[data-training]').forEach(btn=>btn.addEventListener('click',()=>setTraining(btn.dataset.training)));
+document.getElementById('btn-home').addEventListener('click',goHome);
+document.getElementById('btn-cancel').addEventListener('click',goHome);
+
+function setFeedback(kind, symbol, text){
+  feedback.className = `feedback ${kind || ''}`.trim();
+  feedback.innerHTML = `<div class="symbol" aria-hidden="true">${symbol}</div><div class="text">${text}</div>`;
+}
 
 async function initModel(){
   const vision = await FilesetResolver.forVisionTasks(
-    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+    'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
   );
   poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
-    baseOptions: {
-      modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
-      delegate: "GPU"
+    baseOptions:{
+      modelAssetPath:'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
+      delegate:'GPU'
     },
-    runningMode: "VIDEO",
-    numPoses: 1
+    runningMode:'VIDEO',
+    numPoses:1
   });
 }
 
 async function startCamera(){
-  btnStart.disabled = true;
-  camMsg.textContent = "Chargement du modèle IA...";
+  btnCamera.disabled = true;
+  btnCamera.textContent = 'PRÉPARATION…';
+  showScreen('camera');
+  camStatus.textContent = 'Chargement du modèle d’analyse…';
   try{
+    if(!navigator.mediaDevices?.getUserMedia) throw new Error('Caméra non disponible dans ce navigateur.');
     if(!poseLandmarker) await initModel();
-    camMsg.textContent = "Activation de la caméra...";
+    camStatus.textContent = 'Autorisez l’accès à la caméra.';
     stream = await navigator.mediaDevices.getUserMedia({
-      video:{ facingMode:'user', width:{ideal:720}, height:{ideal:960} },
+      video:{facingMode:'user',width:{ideal:720},height:{ideal:960}},
       audio:false
     });
     video.srcObject = stream;
     await video.play();
-    placeholder.style.display = 'none';
-    btnStop.style.display = 'inline-flex';
-    running = true;
     resizeCanvas();
-    lodResetWindow();
+    running = true;
+    analysisActive = false;
+    sessionSamples = [];
+    previousSample = null;
+    smoothed = null;
+    cadreEngine.reset();
+    lastVideoTime = -1;
+    lastSampleAt = 0;
+    btnFinish.disabled = true;
+    camStatus.textContent = 'Placez votre corps dans le cadre.';
+    setFeedback('', '👀', 'Placez-vous entièrement dans le cadre.');
     loop();
+    await runCountdown();
+    analysisActive = true;
+    btnFinish.disabled = selectedTraining==='cadre';
+    camStatus.textContent = selectedTraining==='cadre' ? 'Création de votre repère de départ…' : 'Analyse locale en cours';
+    if(selectedTraining==='cadre'){
+      document.getElementById('session-label').textContent='Gardez votre cadre naturel environ 2 secondes pour créer un repère personnel.';
+    }else{
+      document.getElementById('session-label').textContent='Les observations affichées sont indicatives.';
+    }
   }catch(err){
     console.error(err);
-    camMsg.innerHTML = 'Impossible d\'accéder à la caméra.<br><span class="err">'+ (err.message||err) +'</span>';
-    btnStart.disabled = false;
+    stopCamera();
+    showScreen('setup');
+    const message = err?.name === 'NotAllowedError'
+      ? 'L’accès à la caméra a été refusé. Autorisez la caméra dans les réglages du navigateur puis réessayez.'
+      : 'Impossible d’activer la caméra. Vérifiez que la page est ouverte en HTTPS et que la caméra est disponible.';
+    document.getElementById('setup-title').textContent = 'La caméra n’a pas pu démarrer.';
+    const existing = document.getElementById('camera-error');
+    if(existing) existing.remove();
+    const errorBox = document.createElement('div');
+    errorBox.id = 'camera-error';
+    errorBox.className = 'note';
+    errorBox.textContent = message;
+    document.querySelector('#screen-setup .actions').before(errorBox);
+  }finally{
+    btnCamera.disabled = false;
+    btnCamera.textContent = 'ACTIVER LA CAMÉRA';
   }
 }
 
 function stopCamera(){
+  analysisActive = false;
   running = false;
   if(rafId) cancelAnimationFrame(rafId);
-  if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
-  placeholder.style.display = 'flex';
-  btnStop.style.display = 'none';
-  btnStart.disabled = false;
-  camMsg.textContent = "Active la caméra pour commencer.";
-  feedback.className = 'feedback-banner';
-  feedback.innerHTML = '<div class="dot"></div><p>En attente d\'analyse<span class="sub">Lance la caméra pour commencer</span></p>';
-  document.getElementById('lod-instruction-text').textContent = 'Démarre la caméra';
-  document.getElementById('lod-instruction-sub').textContent = "pour commencer l'exercice";
-  setLodStatus('idle','En attente');
-  if(creativeActive) toggleCreativeSession(); // auto-stop session if camera stops
+  rafId = null;
+  if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
+  video.srcObject = null;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  btnFinish.disabled = true;
 }
 
-btnStart.addEventListener('click', startCamera);
-btnStop.addEventListener('click', stopCamera);
-window.addEventListener('resize', resizeCanvas);
+async function runCountdown(){
+  countdown.classList.add('show');
+  for(const value of ['3','2','1']){
+    countdown.textContent = value;
+    await new Promise(resolve=>setTimeout(resolve,850));
+  }
+  countdown.classList.remove('show');
+}
+
+document.getElementById('btn-camera').addEventListener('click', startCamera);
+window.addEventListener('resize',resizeCanvas);
 
 function resizeCanvas(){
   const rect = video.getBoundingClientRect();
-  canvas.width = rect.width;
-  canvas.height = rect.height;
+  const ratio = window.devicePixelRatio || 1;
+  canvas.width = Math.max(1, Math.round(rect.width * ratio));
+  canvas.height = Math.max(1, Math.round(rect.height * ratio));
+  ctx.setTransform(ratio,0,0,ratio,0,0);
 }
 
-/* ---------- math helpers ---------- */
-function dist(a,b){ return Math.hypot(a.x-b.x, a.y-b.y); }
-function mid(a,b){ return {x:(a.x+b.x)/2, y:(a.y+b.y)/2}; }
+function dist(a,b){return Math.hypot(a.x-b.x,a.y-b.y)}
+function mid(a,b){return{x:(a.x+b.x)/2,y:(a.y+b.y)/2}}
 function angleAt(a,b,c){
-  const v1 = {x:a.x-b.x, y:a.y-b.y};
-  const v2 = {x:c.x-b.x, y:c.y-b.y};
-  const dot = v1.x*v2.x + v1.y*v2.y;
-  const m1 = Math.hypot(v1.x,v1.y), m2 = Math.hypot(v2.x,v2.y);
-  if(m1===0||m2===0) return 0;
-  let cos = dot/(m1*m2);
-  cos = Math.max(-1,Math.min(1,cos));
-  return Math.acos(cos) * 180/Math.PI;
+  const v1={x:a.x-b.x,y:a.y-b.y},v2={x:c.x-b.x,y:c.y-b.y};
+  const m1=Math.hypot(v1.x,v1.y),m2=Math.hypot(v2.x,v2.y);
+  if(!m1||!m2)return 0;
+  const cos=Math.max(-1,Math.min(1,(v1.x*v2.x+v1.y*v2.y)/(m1*m2)));
+  return Math.acos(cos)*180/Math.PI;
 }
-function angleFromVertical(p1,p2){
-  const dx = p2.x-p1.x, dy = p2.y-p1.y;
-  return Math.atan2(Math.abs(dx), Math.abs(dy)) * 180/Math.PI;
-}
-function lineAngle(p1,p2){
-  return Math.atan2(p2.y-p1.y, p2.x-p1.x) * 180/Math.PI;
-}
-function setDial(id,valueId,deg,pct,status){
-  const dial = document.getElementById(id);
-  const val = document.getElementById(valueId);
-  const color = status==='good' ? 'var(--good)' : status==='warn' ? 'var(--warn)' : 'var(--bad)';
-  dial.style.setProperty('--pct', Math.max(6,Math.min(100,pct)));
-  dial.style.setProperty('--dc', color);
-  val.textContent = Math.round(deg) + '°';
-}
-function updateFeedback(status,msg,sub){
-  feedback.className = 'feedback-banner status-'+status;
-  feedback.innerHTML = '<div class="dot"></div><p>'+msg+'<span class="sub">'+sub+'</span></p>';
-}
+function angleFromVertical(p1,p2){return Math.atan2(Math.abs(p2.x-p1.x),Math.abs(p2.y-p1.y))*180/Math.PI}
+function lineAngle(p1,p2){return Math.atan2(p2.y-p1.y,p2.x-p1.x)*180/Math.PI}
+function average(arr,key){return arr.length?arr.reduce((sum,x)=>sum+(x[key]??0),0)/arr.length:0}
+function range(arr,key){if(!arr.length)return 0;const v=arr.map(x=>x[key]);return Math.max(...v)-Math.min(...v)}
+function meanAbsDelta(arr,key){if(arr.length<2)return 0;let total=0;for(let i=1;i<arr.length;i++)total+=Math.abs(arr[i][key]-arr[i-1][key]);return total/(arr.length-1)}
+function fmt(n,digits=1){return Number.isFinite(n)?n.toFixed(digits):'—'}
 
-/* =========================================================
-   DETECTION LOOP — computes core metrics once per frame,
-   then feeds whichever mode is currently active.
-   ========================================================= */
+const CONNECTIONS=[[11,13],[13,15],[12,14],[14,16],[11,12],[23,24],[11,23],[12,24],[23,25],[24,26]];
+
 function loop(){
-  if(!running) return;
-  if(video.currentTime !== lastVideoTime){
-    lastVideoTime = video.currentTime;
-    const result = poseLandmarker.detectForVideo(video, performance.now());
-    processFrame(result);
+  if(!running)return;
+  try{
+    if(video.currentTime!==lastVideoTime && poseLandmarker){
+      lastVideoTime=video.currentTime;
+      const result=poseLandmarker.detectForVideo(video,performance.now());
+      processFrame(result);
+    }
+  }catch(err){
+    console.error(err);
+    camStatus.textContent='Analyse momentanément indisponible';
   }
-  rafId = requestAnimationFrame(loop);
+  rafId=requestAnimationFrame(loop);
 }
-
-let lastMetrics = null; // shared metrics snapshot, read by creative sampler
 
 function processFrame(result){
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  const lm = result.landmarks && result.landmarks[0];
+  const rect=video.getBoundingClientRect();
+  ctx.clearRect(0,0,rect.width,rect.height);
+  const lm=result.landmarks?.[0];
+  const world=result.worldLandmarks?.[0];
   if(!lm){
-    if(currentMode==='cadre') updateFeedback('warn','Corps non détecté','Recule-toi ou améliore la lumière');
+    setFeedback('warn','👀','Corps non détecté. Reculez légèrement ou améliorez la lumière.');
     return;
   }
 
-  const W = canvas.width, H = canvas.height;
-  const pt = i => ({x: lm[i].x*W, y: lm[i].y*H});
-
-  const shL = pt(11), shR = pt(12), elL = pt(13), elR = pt(14), wrL = pt(15), wrR = pt(16);
-  const hipL = pt(23), hipR = pt(24);
-  const shMid = mid(shL,shR), hipMid = mid(hipL,hipR);
-  const torso = dist(shMid,hipMid) || 1;
-
-  function armStatus(sh, wr, elbow, label, dialId, valId){
-    const heightDiff = (wr.y - sh.y) / torso;
-    let status, msg=null;
-    if(heightDiff > 0.55){ status='bad'; msg = 'Bras '+label+' trop bas'; }
-    else if(heightDiff > 0.35){ status='warn'; msg = 'Bras '+label+' un peu bas'; }
-    else if(heightDiff < -0.15){ status='bad'; msg = 'Bras '+label+' trop haut'; }
-    else { status='good'; }
-    const pct = Math.max(0, 100 - Math.abs(heightDiff-0.15)*140);
-    if(currentMode==='cadre') setDial(dialId, valId, angleAt(sh,elbow,wr), pct, status);
-    return {status, msg, heightDiff};
+  const keyIds=[11,12,13,14,15,16,23,24];
+  const visibilities=keyIds.map(i=>lm[i]?.visibility ?? 0);
+  const presences=keyIds.map(i=>lm[i]?.presence ?? 1);
+  const minVisibility=Math.min(...visibilities);
+  const minPresence=Math.min(...presences);
+  if(minVisibility<0.60 || minPresence<0.50){
+    setFeedback('warn','👀','Certains repères sont difficiles à voir. Montrez mieux les épaules, les bras et les hanches.');
+    return;
   }
-  const armLres = armStatus(shL, wrL, elL, 'gauche', 'dial-arml', 'val-arml');
-  const armRres = armStatus(shR, wrR, elR, 'droit', 'dial-armr', 'val-armr');
 
-  const backDev = angleFromVertical(hipMid, shMid);
-  let backStatus, backMsg=null;
-  if(backDev > 16){ backStatus='bad'; backMsg='Dos pas assez droit, redresse-toi'; }
-  else if(backDev > 8){ backStatus='warn'; backMsg='Dos légèrement penché'; }
-  else backStatus='good';
-  if(currentMode==='cadre') setDial('dial-back','val-back', backDev, 100 - backDev*4, backStatus);
+  const outOfFrame=keyIds.some(i=>lm[i].x<0.025||lm[i].x>0.975||lm[i].y<0.025||lm[i].y>0.975);
+  if(outOfFrame){
+    setFeedback('warn','↔️','Une partie du haut du corps sort du cadre. Reculez légèrement.');
+    return;
+  }
 
-  const shAngle = lineAngle(shL,shR);
-  const hipAngle = lineAngle(hipL,hipR);
-  let torsion = Math.abs(shAngle - hipAngle);
-  if(torsion > 90) torsion = 180 - torsion;
-  let rotStatus, rotMsg=null;
-  if(torsion > 20){ rotStatus='bad'; rotMsg='Cadre qui tourne, stabilise épaules et bassin'; }
-  else if(torsion > 10){ rotStatus='warn'; rotMsg='Légère torsion du buste'; }
-  else rotStatus='good';
-  if(currentMode==='cadre') setDial('dial-rot','val-rot', torsion, 100 - torsion*4, rotStatus);
-
-  lastMetrics = {
-    armL: armLres.heightDiff, armR: armRres.heightDiff,
-    back: backDev, torsion: torsion,
-    hipMidXNorm: 1 - (hipMid.x / W) /* mirrored to match on-screen left/right, since video is CSS-flipped */
+  const W=rect.width,H=rect.height;
+  const pt=i=>({x:lm[i].x*W,y:lm[i].y*H});
+  const shL=pt(11),shR=pt(12),elL=pt(13),elR=pt(14),wrL=pt(15),wrR=pt(16),hipL=pt(23),hipR=pt(24);
+  const shMid=mid(shL,shR),hipMid=mid(hipL,hipR);
+  const torso=dist(shMid,hipMid)||1;
+  const shAngle=lineAngle(shL,shR),hipAngle=lineAngle(hipL,hipR);
+  let torsion=Math.abs(shAngle-hipAngle);if(torsion>90)torsion=180-torsion;
+  const raw={
+    armL:(wrL.y-shL.y)/torso,
+    armR:(wrR.y-shR.y)/torso,
+    elbowL:angleAt(shL,elL,wrL),
+    elbowR:angleAt(shR,elR,wrR),
+    elbowL3D:world?angle3D(world[11],world[13],world[15]):NaN,
+    elbowR3D:world?angle3D(world[12],world[14],world[16]):NaN,
+    back:angleFromVertical(hipMid,shMid),
+    torsion,
+    shoulderTilt:Math.abs(shL.y-shR.y)/torso,
+    hipX:1-(hipMid.x/W),
+    hipY:hipMid.y/H,
+    visibility:minVisibility,
+    presence:minPresence,
+    t:performance.now()
   };
+  smoothed=smoothMetrics(smoothed,raw,0.22);
 
-  if(currentMode==='cadre'){
-    const issues = [armLres, armRres, {status:backStatus,msg:backMsg}, {status:rotStatus,msg:rotMsg}].filter(i=>i.msg);
-    const bad = issues.find(i=>i.status==='bad');
-    const warnI = issues.find(i=>i.status==='warn');
-    if(bad) updateFeedback('bad', bad.msg, 'Corrige et regarde le cadran concerné');
-    else if(warnI) updateFeedback('warn', warnI.msg, 'Presque parfait, ajuste légèrement');
-    else updateFeedback('good', 'Cadre solide, continue comme ça', 'Bras, dos et rotation sont alignés');
+  drawSkeleton(lm,W,H);
+  if(!analysisActive)return;
+
+  let cadreSignal=null;
+  if(performance.now()-lastSampleAt>=100){
+    const sample={...smoothed};
+    if(previousSample){
+      sample.moveX=Math.abs(sample.hipX-previousSample.hipX);
+      sample.moveY=Math.abs(sample.hipY-previousSample.hipY);
+      sample.armChange=(Math.abs(sample.armL-previousSample.armL)+Math.abs(sample.armR-previousSample.armR))/2;
+      sample.rotationChange=Math.abs(sample.torsion-previousSample.torsion);
+    }else{
+      sample.moveX=sample.moveY=sample.armChange=sample.rotationChange=0;
+    }
+    sessionSamples.push(sample);
+    previousSample=sample;
+    lastSampleAt=performance.now();
+    if(selectedTraining==='cadre')cadreSignal=cadreEngine.ingest(sample);
   }
 
-  if(currentMode==='lod'){
-    lodTrackPosition(lastMetrics.hipMidXNorm);
+  if(selectedTraining==='cadre'){
+    if(cadreSignal){
+      setFeedback(cadreSignal.kind,cadreSignal.symbol,cadreSignal.text);
+      if(cadreSignal.phase==='baseline'){
+        camStatus.textContent='Création de votre repère de départ…';
+      }else if(cadreSignal.phase==='ready'||cadreSignal.phase==='analysis'){
+        camStatus.textContent='Analyse locale en cours';
+        btnFinish.disabled=false;
+        document.getElementById('session-label').textContent='FrameCheck compare les variations à votre propre repère de départ, pas à une posture universelle.';
+      }
+    }
+    return;
   }
-
-  /* ---- draw skeleton (always, while any camera mode active) ---- */
-  ctx.lineWidth = 3;
-  ctx.lineCap = 'round';
-  CONNECTIONS.forEach(([a,b])=>{
-    const p1 = pt(a), p2 = pt(b);
-    let color = 'rgba(243,241,248,0.5)';
-    if((a===11&&b===13)||(a===13&&b===15)) color = armLres.status==='good' ? '#3DFFC0' : armLres.status==='warn' ? '#FFB84D' : '#FF5C6C';
-    if((a===12&&b===14)||(a===14&&b===16)) color = armRres.status==='good' ? '#3DFFC0' : armRres.status==='warn' ? '#FFB84D' : '#FF5C6C';
-    if((a===11&&b===23)||(a===12&&b===24)) color = backStatus==='good' ? '#3DFFC0' : backStatus==='warn' ? '#FFB84D' : '#FF5C6C';
-    if(a===11&&b===12) color = rotStatus==='good' ? '#3DFFC0' : rotStatus==='warn' ? '#FFB84D' : '#FF5C6C';
-    ctx.strokeStyle = color;
-    ctx.beginPath(); ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.stroke();
-  });
-  [11,12,13,14,15,16,23,24,0].forEach(i=>{
-    const p = pt(i);
-    ctx.beginPath(); ctx.arc(p.x,p.y,4,0,Math.PI*2);
-    ctx.fillStyle = '#F3F1F8'; ctx.fill();
-  });
+  updateLiveFeedback(smoothed);
+}
+function smoothMetrics(prev,next,a){
+  if(!prev)return{...next};
+  const out={...next};
+  for(const key of ['armL','armR','elbowL','elbowR','elbowL3D','elbowR3D','back','torsion','shoulderTilt','hipX','hipY','visibility','presence']){
+    out[key]=prev[key]*(1-a)+next[key]*a;
+  }
+  return out;
 }
 
-/* =========================================================
-   LIGNE DE DANSE — exercise logic
-   ========================================================= */
-const LOD_WINDOW_MS = 3200;
-const LOD_MOVE_THRESH = 0.045;   // normalized horizontal displacement to count as "moved"
-const LOD_ACTIVITY_THRESH = 0.02; // min cumulative movement to avoid "blocked" verdict
+function drawSkeleton(lm,W,H){
+  const pt=i=>({x:lm[i].x*W,y:lm[i].y*H});
+  ctx.lineWidth=3;ctx.lineCap='round';ctx.strokeStyle='rgba(88,224,181,.9)';ctx.fillStyle='#fff';
+  CONNECTIONS.forEach(([a,b])=>{const p1=pt(a),p2=pt(b);ctx.beginPath();ctx.moveTo(p1.x,p1.y);ctx.lineTo(p2.x,p2.y);ctx.stroke()});
+  [11,12,13,14,15,16,23,24].forEach(i=>{const p=pt(i);ctx.beginPath();ctx.arc(p.x,p.y,4,0,Math.PI*2);ctx.fill()});
+}
 
-const lodInstructionText = document.getElementById('lod-instruction-text');
-const lodInstructionSub = document.getElementById('lod-instruction-sub');
-const lodArrowSvg = document.getElementById('lod-arrow-svg');
-const lodStatusEl = document.getElementById('lod-status');
-const lodScoreVal = document.getElementById('lod-score-val');
-const lodStatsEl = document.getElementById('lod-stats');
-
-let lodInstruction = 'droite'; // 'droite' | 'gauche' | 'flux'
-let lodWindowStart = null;
-let lodWindowSamples = [];
-let lodTotal = 0, lodCorrect = 0;
-let lodTimer = null;
-
-function lodSetInstruction(kind){
-  lodInstruction = kind;
-  if(kind==='droite'){
-    lodInstructionText.textContent = 'AVANCE À DROITE';
-    lodInstructionSub.textContent = 'suis le sens de la ligne de danse';
-    lodArrowSvg.innerHTML = '<path d="M4 12h16M14 6l6 6-6 6"/>';
-    lodArrowSvg.parentElement.style.transform = 'rotate(0deg)';
-  } else if(kind==='gauche'){
-    lodInstructionText.textContent = 'AVANCE À GAUCHE';
-    lodInstructionSub.textContent = 'suis le sens de la ligne de danse';
-    lodArrowSvg.innerHTML = '<path d="M4 12h16M14 6l6 6-6 6"/>';
-    lodArrowSvg.parentElement.style.transform = 'rotate(180deg)';
-  } else {
-    lodInstructionText.textContent = 'NE BLOQUE PAS LE FLUX';
-    lodInstructionSub.textContent = 'petits déplacements, ne reste pas figé';
-    lodArrowSvg.innerHTML = '<circle cx="12" cy="12" r="7"/>';
-    lodArrowSvg.parentElement.style.transform = 'rotate(0deg)';
+function updateLiveFeedback(m){
+  if(selectedTraining==='posture'){
+    if(m.back>16){setFeedback('warn','↔️','Votre axe semble incliné dans l’image. Essayez de vous redresser légèrement.');return}
+    if(m.shoulderTilt>0.16){setFeedback('warn','↔️','Les épaules semblent inclinées dans l’image. Vérifiez aussi que le téléphone est droit.');return}
+    setFeedback('good','✅','Aucun écart important n’est visible pour le moment.');
+  }else if(selectedTraining==='marche'){
+    const recent=sessionSamples.slice(-8);
+    const movement=recent.reduce((s,x)=>s+(x.moveX||0)+(x.moveY||0),0);
+    if(recent.length<4){setFeedback('','🚶','Marchez naturellement tout en restant visible.');return}
+    if(movement<0.018){setFeedback('warn','🚶','Peu de déplacement est détecté pour le moment.');return}
+    setFeedback('good','✅','Déplacement détecté. Continuez à marcher naturellement.');
+  }else{
+    const recent=sessionSamples.slice(-10);
+    const variation=recent.reduce((s,x)=>s+(x.moveX||0)+(x.moveY||0)+(x.armChange||0)*0.5+(x.rotationChange||0)/80,0);
+    if(recent.length<5){setFeedback('','✨','Bougez librement. FrameCheck observe seulement la variété visible.');return}
+    if(variation<0.08){setFeedback('warn','✨','Peu de variation est visible sur ces dernières secondes.');return}
+    setFeedback('good','✅','Variation de mouvement détectée.');
   }
 }
-function setLodStatus(kind,text){
-  lodStatusEl.className = 'lod-status-pill' + (kind==='ok'?' ok':kind==='fail'?' fail':'');
-  lodStatusEl.textContent = text;
-}
-function lodResetWindow(){
-  lodWindowStart = performance.now();
-  lodWindowSamples = [];
-  const options = ['droite','gauche','flux'];
-  const next = options[Math.floor(Math.random()*options.length)];
-  lodSetInstruction(next);
-  setLodStatus('idle','Analyse en cours…');
-}
-function lodTrackPosition(xNorm){
-  if(lodWindowStart===null) lodResetWindow();
-  lodWindowSamples.push(xNorm);
-  const elapsed = performance.now() - lodWindowStart;
-  if(elapsed >= LOD_WINDOW_MS && lodWindowSamples.length >= 5){
-    lodEvaluateWindow();
-  }
-}
-function lodEvaluateWindow(){
-  const first = lodWindowSamples[0];
-  const last = lodWindowSamples[lodWindowSamples.length-1];
-  const net = last - first; // screen-space; camera is mirrored via CSS so this matches visual left/right
-  let cumulative = 0;
-  for(let i=1;i<lodWindowSamples.length;i++) cumulative += Math.abs(lodWindowSamples[i]-lodWindowSamples[i-1]);
 
-  let ok = false, resultText = '';
-  if(lodInstruction==='droite'){
-    if(net > LOD_MOVE_THRESH){ ok=true; resultText='Bon sens !'; }
-    else if(net < -LOD_MOVE_THRESH){ resultText='Contre-sens !'; }
-    else resultText='Pas assez de déplacement';
-  } else if(lodInstruction==='gauche'){
-    if(net < -LOD_MOVE_THRESH){ ok=true; resultText='Bon sens !'; }
-    else if(net > LOD_MOVE_THRESH){ resultText='Contre-sens !'; }
-    else resultText='Pas assez de déplacement';
-  } else {
-    if(cumulative > LOD_ACTIVITY_THRESH){ ok=true; resultText='Flux fluide'; }
-    else resultText='Bloqué·e — bouge un peu';
-  }
+document.getElementById('btn-finish').addEventListener('click',()=>finishSession());
 
-  lodTotal++; if(ok) lodCorrect++;
-  setLodStatus(ok?'ok':'fail', resultText);
-  lodScoreVal.textContent = Math.round((lodCorrect/lodTotal)*100) + '%';
-  lodStatsEl.textContent = lodCorrect + ' / ' + lodTotal + ' séquences réussies';
-
-  lodResetWindow();
-}
-document.getElementById('btn-lod-reset').addEventListener('click', ()=>{
-  lodTotal = 0; lodCorrect = 0;
-  lodScoreVal.textContent = '--%';
-  lodStatsEl.textContent = '0 / 0 séquences réussies';
-  lodResetWindow();
+document.getElementById('btn-restart').addEventListener('click',()=>{
+  details.classList.remove('show');
+  btnDetails.setAttribute('aria-expanded','false');
+  showScreen('setup');
 });
 
-/* =========================================================
-   CRÉATIVITÉ — movement diversity index
-   ========================================================= */
-const btnCreativeToggle = document.getElementById('btn-creative-toggle');
-const creativeTimerEl = document.getElementById('creative-timer');
-const creativeSamplesEl = document.getElementById('creative-samples');
-const diversityResult = document.getElementById('diversity-result');
-const diversityScoreEl = document.getElementById('diversity-score');
-const diversityBreakdownEl = document.getElementById('diversity-breakdown');
+btnDetails.addEventListener('click',()=>{
+  const open=details.classList.toggle('show');
+  btnDetails.setAttribute('aria-expanded',String(open));
+  btnDetails.textContent=open?'Masquer les détails':'Voir les détails';
+});
 
-let creativeActive = false;
-let creativeStartTime = null;
-let creativeSampleTimer = null;
-let creativeData = { armL:[], armR:[], back:[], torsion:[] };
-let creativeClockTimer = null;
-
-function toggleCreativeSession(){
-  if(!creativeActive){
-    if(!running){ alert('Démarre la caméra pour lancer une session.'); return; }
-    creativeActive = true;
-    creativeStartTime = performance.now();
-    creativeData = { armL:[], armR:[], back:[], torsion:[] };
-    diversityResult.classList.remove('show');
-    btnCreativeToggle.textContent = 'Terminer la session';
-    creativeSampleTimer = setInterval(()=>{
-      if(lastMetrics){
-        creativeData.armL.push(lastMetrics.armL);
-        creativeData.armR.push(lastMetrics.armR);
-        creativeData.back.push(lastMetrics.back);
-        creativeData.torsion.push(lastMetrics.torsion);
-        creativeSamplesEl.textContent = creativeData.armL.length + ' mesures enregistrées';
-      }
-    }, 500);
-    creativeClockTimer = setInterval(()=>{
-      const s = Math.floor((performance.now()-creativeStartTime)/1000);
-      const mm = String(Math.floor(s/60)).padStart(2,'0');
-      const ss = String(s%60).padStart(2,'0');
-      creativeTimerEl.textContent = mm+':'+ss;
-    }, 250);
-  } else {
-    creativeActive = false;
-    clearInterval(creativeSampleTimer);
-    clearInterval(creativeClockTimer);
-    btnCreativeToggle.textContent = 'Démarrer la session';
-    computeDiversity();
-  }
+function finishSession(){
+  analysisActive=false;
+  const samples=[...sessionSamples];
+  stopCamera();
+  renderResults(samples);
+  showScreen('result');
 }
-btnCreativeToggle.addEventListener('click', toggleCreativeSession);
 
-function stdev(arr){
-  if(arr.length < 2) return 0;
-  const m = arr.reduce((a,b)=>a+b,0)/arr.length;
-  const variance = arr.reduce((a,b)=>a+(b-m)*(b-m),0)/arr.length;
-  return Math.sqrt(variance);
-}
-function computeDiversity(){
-  const n = creativeData.armL.length;
-  if(n < 6){
-    diversityResult.classList.add('show');
-    diversityScoreEl.textContent = '—';
-    diversityBreakdownEl.innerHTML = '<p style="color:var(--text-muted); font-size:12.5px; text-align:center;">Session trop courte — danse au moins 10 secondes pour obtenir un indice fiable.</p>';
+function statusClass(value){return ['À observer','Peu observé','Variable','Variations visibles','Variation visible'].includes(value)?'watch':value==='Session courte'?'neutral':''}
+function row(label,value){return `<div class="result-row"><strong>${label}</strong><span class="result-value ${statusClass(value)}">${value}</span></div>`}
+
+function renderResults(samples){
+  const card=document.getElementById('result-card');
+  const intro=document.getElementById('result-intro');
+  const minSamples = selectedTraining==='liberte' ? 100 : 50;
+  const enough=samples.length>=minSamples;
+  intro.textContent=enough?'Résumé des tendances visibles pendant votre entraînement.':'La session est courte. Les observations ci-dessous sont à interpréter avec prudence.';
+
+  if(!samples.length){
+    card.innerHTML=row('Analyse','Aucune mesure exploitable');
+    details.innerHTML='<p>Aucun repère suffisamment fiable n’a été enregistré.</p>';
     return;
   }
-  // normalize each metric's stdev against a plausible max variation to get 0-100 sub-scores
-  const subs = {
-    'Bras (amplitude)': Math.min(100, (stdev(creativeData.armL.concat(creativeData.armR)) / 0.35) * 100),
-    'Dos (inclinaison)': Math.min(100, (stdev(creativeData.back) / 12) * 100),
-    'Rotation buste/bassin': Math.min(100, (stdev(creativeData.torsion) / 15) * 100)
-  };
-  const values = Object.values(subs);
-  const overall = Math.round(values.reduce((a,b)=>a+b,0)/values.length);
 
-  diversityResult.classList.add('show');
-  diversityScoreEl.textContent = overall + '%';
-  diversityBreakdownEl.innerHTML = Object.entries(subs).map(([label,val])=>{
-    const v = Math.round(val);
-    return '<div class="breakdown-row"><div class="b-label">'+label+'</div><div class="b-track"><div class="b-fill" style="width:'+v+'%"></div></div><div class="b-val">'+v+'%</div></div>';
-  }).join('');
+  const back=average(samples,'back');
+  const torsion=average(samples,'torsion');
+  const armL=average(samples,'armL');
+  const armR=average(samples,'armR');
+  const shoulder=average(samples,'shoulderTilt');
+  const travelX=range(samples,'hipX');
+  const travelY=range(samples,'hipY');
+  const motion=meanAbsDelta(samples,'hipX')+meanAbsDelta(samples,'hipY');
+  const armVar=meanAbsDelta(samples,'armL')+meanAbsDelta(samples,'armR');
+  const rotVar=meanAbsDelta(samples,'torsion');
+
+  if(selectedTraining==='cadre'){
+    const summary=cadreEngine.summary();
+    if(!summary.enough){
+      card.innerHTML=row('Cadre','Session courte')+row('Bras','Session courte')+row('Rotation','Session courte');
+      details.innerHTML='<p>Le repère personnel a été créé, mais la phase d’analyse est trop courte pour résumer une tendance.</p><p>Les seuils de variation restent provisoires et devront être calibrés sur des essais réels.</p>';
+      return;
+    }
+    const armChange=Math.max(summary.leftChangeRatio,summary.rightChangeRatio);
+    const arms=armChange<=0.15?'Proches du repère':armChange<=0.35?'Variable':'Variations visibles';
+    const rotation=summary.medianRotationDelta<=12?'Variation faible':'Variation visible';
+    card.innerHTML=row('Cadre',summary.label)+row('Bras',arms)+row('Rotation',rotation);
+    details.innerHTML=`
+      <p><strong>Repère personnel :</strong> les premières secondes valides de la session servent de référence. FrameCheck compare ensuite les variations à ce repère, et non à une posture Kizomba « idéale ».</p>
+      <p>Cadre proche du repère sur ${fmt(summary.stableRatio*100,0)} % des échantillons analysés.</p>
+      <p>Variation médiane des bras : ${fmt(summary.medianArmDelta,2)} hauteur de buste · variation médiane de rotation projetée : ${fmt(summary.medianRotationDelta)}°.</p>
+      <p>${summary.sampleCount} échantillons ont alimenté le résumé. Les seuils restent provisoires et doivent être calibrés sur des sessions réelles.</p>
+    `;
+    return;
+  }else if(selectedTraining==='posture'){
+    card.innerHTML=row('Axe du buste',enough?(back<=16?'Semble stable':'À observer'):'Session courte')+row('Épaules',enough?(shoulder<=0.16?'Semblent stables':'À observer'):'Session courte')+row('Rotation',enough?(torsion<=20?'Semble stable':'À observer'):'Session courte');
+  }else if(selectedTraining==='marche'){
+    card.innerHTML=row('Déplacement',enough?(travelX+travelY>0.08?'Observé':'Peu observé'):'Session courte')+row('Continuité',enough?(motion>0.004?'Observée':'Peu observée'):'Session courte')+row('Axe du buste',enough?(back<=16?'Semble stable':'À observer'):'Session courte');
+  }else{
+    card.innerHTML=row('Amplitude visible',enough?(armVar>0.012?'Variation observée':'Peu observé'):'Session courte')+row('Déplacements',enough?(travelX+travelY>0.08?'Variation observée':'Peu observé'):'Session courte')+row('Rotations',enough?(rotVar>0.45?'Variation observée':'Peu observé'):'Session courte');
+  }
+
+  details.innerHTML=`
+    <p><strong>Mesures indicatives — seuils provisoires non calibrés.</strong></p>
+    <p>Axe moyen dans l’image : ${fmt(back)}° · Rotation épaules/bassin projetée : ${fmt(torsion)}°.</p>
+    <p>Déplacement horizontal observé : ${fmt(travelX*100)} % de la largeur du cadre · variation verticale : ${fmt(travelY*100)} %.</p>
+    <p>${samples.length} échantillons exploitables ont été conservés uniquement en mémoire pendant cette session. La vidéo elle-même n’est pas enregistrée.</p>
+  `;
 }
 
-/* init default instruction text before first camera start */
-lodSetInstruction('droite');
-switchTo('cadre');
+window.addEventListener('pagehide',stopCamera);
 </script>
 </body>
 </html>
