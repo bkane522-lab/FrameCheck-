@@ -202,6 +202,9 @@ p{font-size:17px;line-height:1.55;margin:0;color:var(--muted)}
 <script type="module">
 import { PoseLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
 import { CadreEngine, angle3D } from "./cadre-engine.mjs";
+import { PostureEngine } from "./posture-engine.mjs";
+import { MarcheEngine } from "./marche-engine.mjs";
+import { LiberteEngine } from "./liberte-engine.mjs";
 
 const screens = [...document.querySelectorAll('.screen')];
 const video = document.getElementById('video');
@@ -215,6 +218,9 @@ const btnFinish = document.getElementById('btn-finish');
 const details = document.getElementById('details');
 const btnDetails = document.getElementById('btn-details');
 const cadreEngine = new CadreEngine();
+const postureEngine = new PostureEngine();
+const marcheEngine = new MarcheEngine();
+const liberteEngine = new LiberteEngine();
 
 const TRAININGS = {
   cadre: {label:'Cadre'},
@@ -257,14 +263,18 @@ function setTraining(key){
     g1.textContent='Cadrez clairement le haut du corps, des épaules jusqu’aux hanches.';
     g2.textContent='Gardez les deux bras visibles et posez le téléphone sur un support stable.';
     g3.textContent='Commencez avec votre cadre naturel : FrameCheck l’utilisera comme repère personnel.';
+  }else if(key==='posture'){
+    g1.textContent='Cadrez les épaules et les hanches clairement dans l’image.';
+    g2.textContent='Posez le téléphone bien droit sur un support stable.';
+    g3.textContent='Gardez votre posture naturelle environ 2 secondes : elle servira de repère personnel.';
   }else if(key==='marche'){
-    g1.textContent='Gardez le corps entier visible, y compris les pieds.';
+    g1.textContent='Gardez le corps entier visible, y compris les chevilles et les pieds.';
     g2.textContent='Posez le téléphone sur un support stable et laissez de l’espace pour marcher.';
-    g3.textContent='Choisissez un endroit suffisamment éclairé.';
+    g3.textContent='Marchez naturellement : FrameCheck observe le déplacement, la continuité et l’alternance visible des pieds.';
   }else{
-    g1.textContent='Gardez votre corps visible dans le cadre.';
+    g1.textContent='Gardez votre corps entier visible dans le cadre.';
     g2.textContent='Posez le téléphone sur un support stable.';
-    g3.textContent='Choisissez un endroit suffisamment éclairé.';
+    g3.textContent='Bougez librement : FrameCheck observe amplitudes, déplacements, changements de hauteur, rotations et répétitions visibles.';
   }
   showScreen('setup');
 }
@@ -317,6 +327,9 @@ async function startCamera(){
     previousSample = null;
     smoothed = null;
     cadreEngine.reset();
+    postureEngine.reset();
+    marcheEngine.reset();
+    liberteEngine.reset();
     lastVideoTime = -1;
     lastSampleAt = 0;
     btnFinish.disabled = true;
@@ -325,12 +338,17 @@ async function startCamera(){
     loop();
     await runCountdown();
     analysisActive = true;
-    btnFinish.disabled = selectedTraining==='cadre';
-    camStatus.textContent = selectedTraining==='cadre' ? 'Création de votre repère de départ…' : 'Analyse locale en cours';
+    const needsBaseline = selectedTraining==='cadre' || selectedTraining==='posture';
+    btnFinish.disabled = needsBaseline;
+    camStatus.textContent = needsBaseline ? 'Création de votre repère de départ…' : 'Analyse locale en cours';
     if(selectedTraining==='cadre'){
       document.getElementById('session-label').textContent='Gardez votre cadre naturel environ 2 secondes pour créer un repère personnel.';
+    }else if(selectedTraining==='posture'){
+      document.getElementById('session-label').textContent='Gardez votre posture naturelle environ 2 secondes pour créer un repère personnel.';
+    }else if(selectedTraining==='marche'){
+      document.getElementById('session-label').textContent='FrameCheck observe seulement les mouvements visibles dans l’image, pas la qualité artistique de votre marche.';
     }else{
-      document.getElementById('session-label').textContent='Les observations affichées sont indicatives.';
+      document.getElementById('session-label').textContent='FrameCheck décrit la variété visible du mouvement. Il ne mesure pas scientifiquement la créativité artistique.';
     }
   }catch(err){
     console.error(err);
@@ -400,7 +418,7 @@ function range(arr,key){if(!arr.length)return 0;const v=arr.map(x=>x[key]);retur
 function meanAbsDelta(arr,key){if(arr.length<2)return 0;let total=0;for(let i=1;i<arr.length;i++)total+=Math.abs(arr[i][key]-arr[i-1][key]);return total/(arr.length-1)}
 function fmt(n,digits=1){return Number.isFinite(n)?n.toFixed(digits):'—'}
 
-const CONNECTIONS=[[11,13],[13,15],[12,14],[14,16],[11,12],[23,24],[11,23],[12,24],[23,25],[24,26]];
+const CONNECTIONS=[[11,13],[13,15],[12,14],[14,16],[11,12],[23,24],[11,23],[12,24],[23,25],[25,27],[27,31],[24,26],[26,28],[28,32]];
 
 function loop(){
   if(!running)return;
@@ -427,19 +445,23 @@ function processFrame(result){
     return;
   }
 
-  const keyIds=[11,12,13,14,15,16,23,24];
+  const upperIds=[11,12,13,14,15,16,23,24];
+  const postureIds=[11,12,23,24];
+  const fullIds=[11,12,23,24,25,26,27,28,31,32];
+  const keyIds=selectedTraining==='cadre'?upperIds:selectedTraining==='posture'?postureIds:fullIds;
   const visibilities=keyIds.map(i=>lm[i]?.visibility ?? 0);
   const presences=keyIds.map(i=>lm[i]?.presence ?? 1);
   const minVisibility=Math.min(...visibilities);
   const minPresence=Math.min(...presences);
   if(minVisibility<0.60 || minPresence<0.50){
-    setFeedback('warn','👀','Certains repères sont difficiles à voir. Montrez mieux les épaules, les bras et les hanches.');
+    const target=(selectedTraining==='marche'||selectedTraining==='liberte')?'le corps entier, y compris les pieds':'les épaules, les bras et les hanches';
+    setFeedback('warn','👀',`Certains repères sont difficiles à voir. Montrez mieux ${target}.`);
     return;
   }
 
-  const outOfFrame=keyIds.some(i=>lm[i].x<0.025||lm[i].x>0.975||lm[i].y<0.025||lm[i].y>0.975);
+  const outOfFrame=keyIds.some(i=>lm[i].x<0.02||lm[i].x>0.98||lm[i].y<0.02||lm[i].y>0.985);
   if(outOfFrame){
-    setFeedback('warn','↔️','Une partie du haut du corps sort du cadre. Reculez légèrement.');
+    setFeedback('warn','↔️',(selectedTraining==='marche'||selectedTraining==='liberte')?'Une partie du corps sort du cadre. Reculez légèrement.':'Une partie du haut du corps sort du cadre. Reculez légèrement.');
     return;
   }
 
@@ -460,8 +482,14 @@ function processFrame(result){
     back:angleFromVertical(hipMid,shMid),
     torsion,
     shoulderTilt:Math.abs(shL.y-shR.y)/torso,
+    shoulderTiltSigned:(shR.y-shL.y)/torso,
+    hipTiltSigned:(hipR.y-hipL.y)/torso,
     hipX:1-(hipMid.x/W),
     hipY:hipMid.y/H,
+    ankleLX:1-(lm[27]?.x ?? .5),
+    ankleLY:lm[27]?.y ?? .5,
+    ankleRX:1-(lm[28]?.x ?? .5),
+    ankleRY:lm[28]?.y ?? .5,
     visibility:minVisibility,
     presence:minPresence,
     t:performance.now()
@@ -471,7 +499,7 @@ function processFrame(result){
   drawSkeleton(lm,W,H);
   if(!analysisActive)return;
 
-  let cadreSignal=null;
+  let signal=null;
   if(performance.now()-lastSampleAt>=100){
     const sample={...smoothed};
     if(previousSample){
@@ -485,29 +513,34 @@ function processFrame(result){
     sessionSamples.push(sample);
     previousSample=sample;
     lastSampleAt=performance.now();
-    if(selectedTraining==='cadre')cadreSignal=cadreEngine.ingest(sample);
+    if(selectedTraining==='cadre')signal=cadreEngine.ingest(sample);
+    else if(selectedTraining==='posture')signal=postureEngine.ingest(sample);
+    else if(selectedTraining==='marche')signal=marcheEngine.ingest(sample);
+    else if(selectedTraining==='liberte')signal=liberteEngine.ingest(sample);
   }
 
-  if(selectedTraining==='cadre'){
-    if(cadreSignal){
-      setFeedback(cadreSignal.kind,cadreSignal.symbol,cadreSignal.text);
-      if(cadreSignal.phase==='baseline'){
+  if(selectedTraining==='cadre'||selectedTraining==='posture'||selectedTraining==='marche'||selectedTraining==='liberte'){
+    if(signal){
+      setFeedback(signal.kind,signal.symbol,signal.text);
+      if(signal.phase==='baseline'){
         camStatus.textContent='Création de votre repère de départ…';
-      }else if(cadreSignal.phase==='ready'||cadreSignal.phase==='analysis'){
+      }else if(signal.phase==='ready'||signal.phase==='analysis'){
         camStatus.textContent='Analyse locale en cours';
         btnFinish.disabled=false;
-        document.getElementById('session-label').textContent='FrameCheck compare les variations à votre propre repère de départ, pas à une posture universelle.';
+        if(selectedTraining==='cadre')document.getElementById('session-label').textContent='FrameCheck compare les variations à votre propre repère de départ, pas à une posture universelle.';
+        if(selectedTraining==='posture')document.getElementById('session-label').textContent='FrameCheck observe les variations visibles par rapport à votre repère de départ. Le placement du téléphone influence la mesure.';
+        if(selectedTraining==='liberte')document.getElementById('session-label').textContent='FrameCheck décrit la variété visible du mouvement, pas la créativité artistique.';
       }
     }
     return;
   }
-  updateLiveFeedback(smoothed);
 }
 function smoothMetrics(prev,next,a){
   if(!prev)return{...next};
   const out={...next};
-  for(const key of ['armL','armR','elbowL','elbowR','elbowL3D','elbowR3D','back','torsion','shoulderTilt','hipX','hipY','visibility','presence']){
-    out[key]=prev[key]*(1-a)+next[key]*a;
+  for(const key of ['armL','armR','elbowL','elbowR','elbowL3D','elbowR3D','back','torsion','shoulderTilt','shoulderTiltSigned','hipTiltSigned','hipX','hipY','ankleLX','ankleLY','ankleRX','ankleRY','visibility','presence']){
+    const pv=prev[key],nv=next[key];
+    out[key]=Number.isFinite(pv)&&Number.isFinite(nv)?pv*(1-a)+nv*a:nv;
   }
   return out;
 }
@@ -516,27 +549,7 @@ function drawSkeleton(lm,W,H){
   const pt=i=>({x:lm[i].x*W,y:lm[i].y*H});
   ctx.lineWidth=3;ctx.lineCap='round';ctx.strokeStyle='rgba(88,224,181,.9)';ctx.fillStyle='#fff';
   CONNECTIONS.forEach(([a,b])=>{const p1=pt(a),p2=pt(b);ctx.beginPath();ctx.moveTo(p1.x,p1.y);ctx.lineTo(p2.x,p2.y);ctx.stroke()});
-  [11,12,13,14,15,16,23,24].forEach(i=>{const p=pt(i);ctx.beginPath();ctx.arc(p.x,p.y,4,0,Math.PI*2);ctx.fill()});
-}
-
-function updateLiveFeedback(m){
-  if(selectedTraining==='posture'){
-    if(m.back>16){setFeedback('warn','↔️','Votre axe semble incliné dans l’image. Essayez de vous redresser légèrement.');return}
-    if(m.shoulderTilt>0.16){setFeedback('warn','↔️','Les épaules semblent inclinées dans l’image. Vérifiez aussi que le téléphone est droit.');return}
-    setFeedback('good','✅','Aucun écart important n’est visible pour le moment.');
-  }else if(selectedTraining==='marche'){
-    const recent=sessionSamples.slice(-8);
-    const movement=recent.reduce((s,x)=>s+(x.moveX||0)+(x.moveY||0),0);
-    if(recent.length<4){setFeedback('','🚶','Marchez naturellement tout en restant visible.');return}
-    if(movement<0.018){setFeedback('warn','🚶','Peu de déplacement est détecté pour le moment.');return}
-    setFeedback('good','✅','Déplacement détecté. Continuez à marcher naturellement.');
-  }else{
-    const recent=sessionSamples.slice(-10);
-    const variation=recent.reduce((s,x)=>s+(x.moveX||0)+(x.moveY||0)+(x.armChange||0)*0.5+(x.rotationChange||0)/80,0);
-    if(recent.length<5){setFeedback('','✨','Bougez librement. FrameCheck observe seulement la variété visible.');return}
-    if(variation<0.08){setFeedback('warn','✨','Peu de variation est visible sur ces dernières secondes.');return}
-    setFeedback('good','✅','Variation de mouvement détectée.');
-  }
+  [11,12,13,14,15,16,23,24,25,26,27,28,31,32].forEach(i=>{const p=pt(i);ctx.beginPath();ctx.arc(p.x,p.y,4,0,Math.PI*2);ctx.fill()});
 }
 
 document.getElementById('btn-finish').addEventListener('click',()=>finishSession());
@@ -561,7 +574,7 @@ function finishSession(){
   showScreen('result');
 }
 
-function statusClass(value){return ['À observer','Peu observé','Variable','Variations visibles','Variation visible'].includes(value)?'watch':value==='Session courte'?'neutral':''}
+function statusClass(value){const watch=['À observer','Peu observé','Variable','Variations visibles','Variation visible','Peu visible','Avec plusieurs pauses','Peu d’alternance détectée','Peu de variation','Motifs souvent répétés'];return watch.includes(value)?'watch':value==='Session courte'?'neutral':''}
 function row(label,value){return `<div class="result-row"><strong>${label}</strong><span class="result-value ${statusClass(value)}">${value}</span></div>`}
 
 function renderResults(samples){
@@ -607,19 +620,53 @@ function renderResults(samples){
     `;
     return;
   }else if(selectedTraining==='posture'){
-    card.innerHTML=row('Axe du buste',enough?(back<=16?'Semble stable':'À observer'):'Session courte')+row('Épaules',enough?(shoulder<=0.16?'Semblent stables':'À observer'):'Session courte')+row('Rotation',enough?(torsion<=20?'Semble stable':'À observer'):'Session courte');
+    const summary=postureEngine.summary();
+    if(!summary.enough){
+      card.innerHTML=row('Posture','Session courte')+row('Axe du buste','Session courte')+row('Épaules / bassin','Session courte');
+      details.innerHTML='<p>Le repère personnel a été créé, mais la phase d’analyse est trop courte pour résumer une tendance.</p><p>FrameCheck observe ici des variations projetées dans l’image : le placement du téléphone peut modifier les résultats.</p>';
+      return;
+    }
+    const axis=summary.axisStableRatio>=.85?'Proche du repère':summary.axisStableRatio>=.65?'Variable':'À observer';
+    const shoulders=summary.shoulderStableRatio>=.85?'Proches du repère':summary.shoulderStableRatio>=.65?'Variables':'À observer';
+    card.innerHTML=row('Posture',summary.label)+row('Axe du buste',axis)+row('Épaules',shoulders);
+    details.innerHTML=`
+      <p><strong>Repère personnel :</strong> les premières secondes valides servent de référence. Il ne s’agit pas d’une posture Kizomba universelle.</p>
+      <p>Axe proche du repère sur ${fmt(summary.axisStableRatio*100,0)} % des échantillons · épaules sur ${fmt(summary.shoulderStableRatio*100,0)} % · bassin sur ${fmt(summary.hipStableRatio*100,0)} %.</p>
+      <p>Écart médian d’axe projeté : ${fmt(summary.medianAxisDelta)}°. Les seuils sont provisoires et doivent être calibrés sur des essais réels.</p>
+      <p>${summary.sampleCount} échantillons exploitables ont été gardés uniquement en mémoire pendant la session. La vidéo n’est pas enregistrée.</p>
+    `;
+    return;
   }else if(selectedTraining==='marche'){
-    card.innerHTML=row('Déplacement',enough?(travelX+travelY>0.08?'Observé':'Peu observé'):'Session courte')+row('Continuité',enough?(motion>0.004?'Observée':'Peu observée'):'Session courte')+row('Axe du buste',enough?(back<=16?'Semble stable':'À observer'):'Session courte');
+    const summary=marcheEngine.summary();
+    if(!summary.enough){
+      card.innerHTML=row('Déplacement','Session courte')+row('Continuité','Session courte')+row('Alternance','Session courte');
+      details.innerHTML='<p>La session est trop courte pour décrire une tendance de marche. FrameCheck ne compte pas ici des « bons pas » : il observe uniquement le mouvement visible.</p>';
+      return;
+    }
+    card.innerHTML=row('Déplacement',summary.displacementLabel)+row('Continuité',summary.continuityLabel)+row('Alternance des pieds',summary.alternationLabel);
+    details.innerHTML=`
+      <p><strong>Observation visuelle uniquement :</strong> FrameCheck suit le bassin et les chevilles dans l’image. Il ne juge ni la technique, ni le guidage, ni la musicalité.</p>
+      <p>Mouvement détecté sur ${fmt(summary.movingRatio*100,0)} % des échantillons · ${summary.switches} changement(s) de pied dominant détecté(s).</p>
+      <p>Amplitude horizontale du bassin : ${fmt(summary.horizontalRange*100)} % du cadre · verticale : ${fmt(summary.verticalRange*100)} %.</p>
+      <p>Les seuils sont heuristiques et provisoires. ${summary.sampleCount} échantillons ont été conservés uniquement en mémoire pendant cette session.</p>
+    `;
+    return;
   }else{
-    card.innerHTML=row('Amplitude visible',enough?(armVar>0.012?'Variation observée':'Peu observé'):'Session courte')+row('Déplacements',enough?(travelX+travelY>0.08?'Variation observée':'Peu observé'):'Session courte')+row('Rotations',enough?(rotVar>0.45?'Variation observée':'Peu observé'):'Session courte');
+    const summary=liberteEngine.summary();
+    if(!summary.enough){
+      card.innerHTML=row('Amplitude visible','Session courte')+row('Déplacements','Session courte')+row('Répétitivité','Session courte');
+      details.innerHTML='<p>Une session d’environ 10 secondes ou plus est nécessaire pour décrire la variété visible avec un minimum de stabilité.</p><p>Ce module ne mesure pas scientifiquement la créativité artistique.</p>';
+      return;
+    }
+    card.innerHTML=row('Amplitude visible',summary.amplitudeLabel)+row('Déplacements',summary.displacementLabel)+row('Rotations',summary.rotationLabel)+row('Hauteurs',summary.levelLabel)+row('Répétitivité',summary.repetitionLabel);
+    details.innerHTML=`
+      <p><strong>Liberté de mouvement ≠ créativité artistique.</strong> FrameCheck décrit seulement des variations mesurables dans l’image : amplitudes, déplacements du bassin, changements de hauteur, rotations projetées et retour de motifs similaires.</p>
+      <p>Amplitude horizontale observée : ${fmt(summary.horizontalRange*100)} % du cadre · verticale : ${fmt(summary.verticalRange*100)} % · plage de rotation projetée : ${fmt(summary.rotationRange)}°.</p>
+      <p>Indice heuristique de répétition d’états visibles : ${fmt(summary.repetition*100,0)} %. Ce chiffre n’est pas un score artistique et ses seuils doivent encore être calibrés.</p>
+      <p>${summary.sampleCount} échantillons exploitables ont été conservés uniquement en mémoire pendant cette session. La vidéo n’est pas enregistrée.</p>
+    `;
+    return;
   }
-
-  details.innerHTML=`
-    <p><strong>Mesures indicatives — seuils provisoires non calibrés.</strong></p>
-    <p>Axe moyen dans l’image : ${fmt(back)}° · Rotation épaules/bassin projetée : ${fmt(torsion)}°.</p>
-    <p>Déplacement horizontal observé : ${fmt(travelX*100)} % de la largeur du cadre · variation verticale : ${fmt(travelY*100)} %.</p>
-    <p>${samples.length} échantillons exploitables ont été conservés uniquement en mémoire pendant cette session. La vidéo elle-même n’est pas enregistrée.</p>
-  `;
 }
 
 window.addEventListener('pagehide',stopCamera);

@@ -1,69 +1,67 @@
-# FrameCheck
+# FrameCheck — V5
 
-Application d'entraînement Kizomba conçue pour rester simple :
+Application d'entraînement Kizomba volontairement simple :
 
 **Ouvrir → Commencer → Choisir → Positionner le téléphone → Caméra → Résultat.**
 
-## État de développement
+## Modules actifs
 
-### Étape 1 — socle V1
-- accueil simplifié ;
-- quatre entraînements : Cadre, Marche, Posture, Liberté de mouvement ;
-- caméra visible + squelette MediaPipe ;
-- compte à rebours ;
-- résultat de session ;
-- traitement vidéo local dans le navigateur.
+### Cadre
+- repère personnel d'environ 2 secondes ;
+- variations des bras et relation épaules-bassin ;
+- filtrage, lissage temporel et messages prudents.
 
-### Étape 2 — moteur Cadre
-Le module **Cadre** ne juge plus une position par rapport à une posture universelle.
+### Posture
+- moteur `posture-engine.mjs` ;
+- repère personnel ;
+- variations visibles de l'axe projeté du buste, des épaules et du bassin ;
+- aucune posture universelle imposée.
 
-Il fonctionne maintenant ainsi :
-1. après le compte à rebours, environ 2 secondes de repères valides créent un **repère personnel de départ** ;
-2. les variations des bras sont comparées à ce repère ;
-3. les changements doivent persister plusieurs échantillons avant d'afficher un message, afin de réduire le clignotement ;
-4. la rotation épaules-bassin reste descriptive et n'est pas classée comme « bonne » ou « mauvaise » ;
-5. le résumé indique surtout la stabilité par rapport au repère de départ.
+### Marche
+- moteur `marche-engine.mjs` ;
+- observation du déplacement du bassin ;
+- continuité visible ;
+- alternance descriptive de mouvement entre les pieds ;
+- aucun jugement de qualité technique, de guidage ou de musicalité.
 
-Le moteur utilise :
-- landmarks 2D normalisés pour les positions dans l'image ;
-- `visibility` et `presence` pour filtrer les repères peu fiables ;
-- world landmarks 3D MediaPipe pour l'angle du coude lorsqu'ils sont disponibles ;
-- médianes et lissage temporel ;
-- seuils **provisoires**, centralisés dans `cadre-engine.mjs` pour faciliter la future calibration.
+### Liberté de mouvement
+- nouveau moteur `liberte-engine.mjs` ;
+- session minimale d'environ 10 secondes pour le résumé ;
+- variété observable des amplitudes de bras ;
+- déplacements horizontaux et verticaux visibles ;
+- changements de hauteur via la trajectoire projetée du bassin ;
+- plage de rotation épaules-bassin projetée ;
+- répétitivité approximative basée sur le retour d'états de mouvement similaires.
 
-## Limites importantes
+**Important : ce module ne mesure pas scientifiquement la créativité artistique.** Il décrit seulement des caractéristiques visibles et mesurables dans l'image. L'indicateur de répétitivité est heuristique et n'est pas un score artistique.
+
+## Confidentialité
+
+Le flux caméra est analysé localement dans le navigateur. FrameCheck ne contient aucun code d'upload ou de stockage vidéo serveur. MediaPipe, son WASM et son modèle sont encore téléchargés depuis des services externes au démarrage.
+
+## Limites
 
 - FrameCheck ne remplace jamais un professeur.
 - Une estimation MediaPipe n'est pas une mesure biomécanique de laboratoire.
-- La perspective, la lumière, les vêtements, l'occlusion et le placement du téléphone peuvent modifier les résultats.
-- Les seuils de variation du module Cadre sont encore provisoires et doivent être calibrés sur des sessions réelles avant toute revendication de fiabilité.
-- Le module « Liberté de mouvement » décrit uniquement la variété visible de certains mouvements ; il ne mesure pas la créativité artistique.
-- MediaPipe, son WASM et son modèle sont actuellement téléchargés depuis des services externes au démarrage. La vidéo elle-même n'est ni envoyée ni stockée par l'application.
+- Perspective, lumière, vêtements, occlusions et placement du téléphone peuvent modifier les résultats.
+- Les seuils des quatre moteurs restent heuristiques et provisoires jusqu'à calibration sur des sessions réelles.
 
-## Source technique MediaPipe
+## Source technique
 
-Documentation officielle Google MediaPipe Pose Landmarker for Web :
+Google MediaPipe Pose Landmarker for Web :
 https://developers.google.com/edge/mediapipe/solutions/vision/pose_landmarker/web_js
 
-La documentation officielle indique notamment que Pose Landmarker renvoie 33 landmarks par pose, des coordonnées normalisées, des world landmarks 3D, ainsi que des scores de visibilité. Elle précise également que `detectForVideo()` est synchrone et bloque le thread principal pendant l'inférence ; le passage à un Web Worker sera donc évalué lors de l'étape performance/mobile si nécessaire.
+La documentation officielle décrit 33 landmarks par pose, les coordonnées normalisées, les world landmarks 3D et la visibilité. Elle indique aussi que `detectForVideo()` est synchrone sur le Web.
 
 ## Tests
 
-Test du moteur Cadre :
-
 ```bash
 node test-cadre.mjs
+node test-posture.mjs
+node test-marche.mjs
+node test-liberte.mjs
 ```
 
-Le test vérifie :
-- création du repère initial ;
-- session stable ;
-- variation persistante du bras gauche ;
-- variation de rotation ;
-- calcul d'un angle 3D connu.
+## PWA
 
-## Déploiement de test
-
-Servir le dossier en HTTPS. L'accès caméra sur mobile exige un contexte sécurisé (hors localhost).
-
-La PWA n'est pas encore considérée comme finalisée : icônes, service worker, installation Android/iOS et tests hors ligne restent à réaliser.
+Le manifeste existe mais la PWA n'est pas encore finalisée : icônes, service worker, tests d'installation Android/iOS et fonctionnement hors ligne restent à réaliser.
