@@ -1,8 +1,29 @@
-# FrameCheck — V5
+# FrameCheck — suivi corps entier
 
-Application d'entraînement Kizomba volontairement simple :
+Application d'entraînement Kizomba / Urban Kiz volontairement simple :
 
 **Ouvrir → Commencer → Choisir → Positionner le téléphone → Caméra → Résultat.**
+
+## Correction principale de cette version
+
+Cette version corrige deux problèmes observés sur téléphone :
+
+1. le cadrage caméra pouvait donner l'impression que FrameCheck ne suivait que le haut du corps ;
+2. le squelette disparaissait facilement pendant un pivot ou une rotation.
+
+### Changements du suivi
+
+- modèle MediaPipe **Pose Landmarker Full** utilisé en priorité ;
+- repli automatique vers le modèle Lite si le modèle Full ne peut pas être chargé ;
+- cadrage caméra vertical **9:16** ;
+- `object-fit: contain` pour ne plus rogner visuellement la tête ou les pieds ;
+- squelette étendu à la tête, aux bras, au bassin, aux jambes, aux talons et aux pointes de pieds ;
+- seuils de détection / présence / tracking assouplis pour mieux tolérer les vues de profil ;
+- une articulation momentanément masquée ne coupe plus tout le suivi ;
+- le squelette reste affiché brièvement (700 ms maximum, en transparence) lorsqu'un pivot provoque une perte momentanée de détection ;
+- l'analyse se met en pause quand les repères nécessaires sont trop incertains, au lieu d'enregistrer une mesure douteuse ;
+- calcul du dessin corrigé pour respecter le vrai ratio de la vidéo quand des bandes noires apparaissent avec `contain` ;
+- calculs corporels basés sur les dimensions intrinsèques de la vidéo plutôt que sur le rectangle CSS affiché.
 
 ## Modules actifs
 
@@ -25,33 +46,33 @@ Application d'entraînement Kizomba volontairement simple :
 - aucun jugement de qualité technique, de guidage ou de musicalité.
 
 ### Liberté de mouvement
-- nouveau moteur `liberte-engine.mjs` ;
-- session minimale d'environ 10 secondes pour le résumé ;
-- variété observable des amplitudes de bras ;
+- moteur `liberte-engine.mjs` ;
+- variété observable des amplitudes ;
 - déplacements horizontaux et verticaux visibles ;
-- changements de hauteur via la trajectoire projetée du bassin ;
-- plage de rotation épaules-bassin projetée ;
-- répétitivité approximative basée sur le retour d'états de mouvement similaires.
+- changements de hauteur ;
+- rotation épaules-bassin projetée ;
+- répétitivité approximative de motifs visibles.
 
-**Important : ce module ne mesure pas scientifiquement la créativité artistique.** Il décrit seulement des caractéristiques visibles et mesurables dans l'image. L'indicateur de répétitivité est heuristique et n'est pas un score artistique.
+**Ce module ne mesure pas scientifiquement la créativité artistique.**
 
 ## Confidentialité
 
 Le flux caméra est analysé localement dans le navigateur. FrameCheck ne contient aucun code d'upload ou de stockage vidéo serveur. MediaPipe, son WASM et son modèle sont encore téléchargés depuis des services externes au démarrage.
 
-## Limites
+## Limites importantes
 
 - FrameCheck ne remplace jamais un professeur.
+- Un pivot complet dos caméra peut masquer plusieurs articulations ; la V7 cherche à maintenir l'affichage et reprend l'analyse dès que les repères sont suffisamment fiables.
 - Une estimation MediaPipe n'est pas une mesure biomécanique de laboratoire.
 - Perspective, lumière, vêtements, occlusions et placement du téléphone peuvent modifier les résultats.
-- Les seuils des quatre moteurs restent heuristiques et provisoires jusqu'à calibration sur des sessions réelles.
+- Les seuils restent heuristiques et doivent être calibrés sur des sessions réelles de Kizomba / Urban Kiz.
 
 ## Source technique
 
 Google MediaPipe Pose Landmarker for Web :
 https://developers.google.com/edge/mediapipe/solutions/vision/pose_landmarker/web_js
 
-La documentation officielle décrit 33 landmarks par pose, les coordonnées normalisées, les world landmarks 3D et la visibilité. Elle indique aussi que `detectForVideo()` est synchrone sur le Web.
+La documentation officielle décrit les 33 landmarks de la pose et les paramètres `minPoseDetectionConfidence`, `minPosePresenceConfidence` et `minTrackingConfidence`. Les modèles Lite, Full et Heavy sont proposés officiellement.
 
 ## Tests
 

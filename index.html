@@ -65,8 +65,10 @@ p{font-size:17px;line-height:1.55;margin:0;color:var(--muted)}
 .guide-list li{padding:13px 14px;border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--text);font-size:16px;line-height:1.4}
 .privacy{margin-top:18px;padding:14px 15px;border-radius:14px;background:var(--accent-dark);border:1px solid #216b56;color:#dcfff3;font-size:15px;line-height:1.45}
 .camera-shell{margin:-24px -18px 0}
-.cam-wrap{position:relative;width:100%;aspect-ratio:3/4;max-height:68dvh;background:#02040a;overflow:hidden;border-bottom:1px solid var(--line)}
-.cam-wrap video,.cam-wrap canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+.cam-wrap{position:relative;width:100%;aspect-ratio:9/16;max-height:72dvh;background:#02040a;overflow:hidden;border-bottom:1px solid var(--line)}
+.cam-wrap video,.cam-wrap canvas{position:absolute;inset:0;width:100%;height:100%;transform:scaleX(-1)}
+.cam-wrap video{object-fit:contain}
+.cam-wrap canvas{object-fit:fill}
 .cam-wrap video{opacity:1}
 .cam-wrap canvas{pointer-events:none}
 .cam-status{position:absolute;left:14px;right:14px;top:14px;padding:10px 12px;border-radius:12px;background:rgba(4,8,18,.74);backdrop-filter:blur(8px);font-size:14px;font-weight:750;line-height:1.35}
@@ -240,6 +242,10 @@ let lastSampleAt = 0;
 let sessionSamples = [];
 let previousSample = null;
 let smoothed = null;
+let lastInferenceAt = 0;
+let lastPoseLandmarks = null;
+let lastPoseSeenAt = 0;
+const POSE_GRACE_MS = 700;
 
 function showScreen(name){
   screens.forEach(s=>s.classList.toggle('active', s.id === `screen-${name}`));
@@ -260,12 +266,12 @@ function setTraining(key){
   document.getElementById('camera-title').textContent = TRAININGS[key].label + ' — analyse en cours';
   const g1=document.getElementById('guide-1'),g2=document.getElementById('guide-2'),g3=document.getElementById('guide-3');
   if(key==='cadre'){
-    g1.textContent='Cadrez clairement le haut du corps, des épaules jusqu’aux hanches.';
-    g2.textContent='Gardez les deux bras visibles et posez le téléphone sur un support stable.';
+    g1.textContent='Gardez tout le corps visible : tête, épaules, hanches, genoux et pieds.';
+    g2.textContent='Reculez assez pour laisser une petite marge au-dessus de la tête et sous les pieds.';
     g3.textContent='Commencez avec votre cadre naturel : FrameCheck l’utilisera comme repère personnel.';
   }else if(key==='posture'){
-    g1.textContent='Cadrez les épaules et les hanches clairement dans l’image.';
-    g2.textContent='Posez le téléphone bien droit sur un support stable.';
+    g1.textContent='Gardez tout le corps visible, de la tête jusqu’aux pieds.';
+    g2.textContent='Posez le téléphone verticalement sur un support stable, sans zoom numérique.';
     g3.textContent='Gardez votre posture naturelle environ 2 secondes : elle servira de repère personnel.';
   }else if(key==='marche'){
     g1.textContent='Gardez le corps entier visible, y compris les chevilles et les pieds.';
@@ -295,14 +301,32 @@ async function initModel(){
   const vision = await FilesetResolver.forVisionTasks(
     'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
   );
-  poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
-    baseOptions:{
-      modelAssetPath:'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
-      delegate:'GPU'
-    },
+  const common={
     runningMode:'VIDEO',
-    numPoses:1
-  });
+    numPoses:1,
+    minPoseDetectionConfidence:0.35,
+    minPosePresenceConfidence:0.35,
+    minTrackingConfidence:0.30
+  };
+  const fullModel='https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task';
+  const liteModel='https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
+  const attempts=[
+    {modelAssetPath:fullModel,delegate:'GPU'},
+    {modelAssetPath:fullModel},
+    {modelAssetPath:liteModel,delegate:'GPU'},
+    {modelAssetPath:liteModel}
+  ];
+  let lastError=null;
+  for(const baseOptions of attempts){
+    try{
+      poseLandmarker = await PoseLandmarker.createFromOptions(vision,{...common,baseOptions});
+      return;
+    }catch(err){
+      lastError=err;
+      console.warn('Tentative MediaPipe suivante…',err);
+    }
+  }
+  throw lastError || new Error('Impossible de charger le modèle de pose.');
 }
 
 async function startCamera(){
@@ -315,7 +339,7 @@ async function startCamera(){
     if(!poseLandmarker) await initModel();
     camStatus.textContent = 'Autorisez l’accès à la caméra.';
     stream = await navigator.mediaDevices.getUserMedia({
-      video:{facingMode:'user',width:{ideal:720},height:{ideal:960}},
+      video:{facingMode:'user',width:{ideal:720},height:{ideal:1280},aspectRatio:{ideal:0.5625},frameRate:{ideal:30,max:30}},
       audio:false
     });
     video.srcObject = stream;
@@ -332,6 +356,9 @@ async function startCamera(){
     liberteEngine.reset();
     lastVideoTime = -1;
     lastSampleAt = 0;
+    lastInferenceAt = 0;
+    lastPoseLandmarks = null;
+    lastPoseSeenAt = 0;
     btnFinish.disabled = true;
     camStatus.textContent = 'Placez votre corps dans le cadre.';
     setFeedback('', '👀', 'Placez-vous entièrement dans le cadre.');
@@ -379,6 +406,8 @@ function stopCamera(){
   if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
   video.srcObject = null;
   ctx.clearRect(0,0,canvas.width,canvas.height);
+  lastPoseLandmarks = null;
+  lastPoseSeenAt = 0;
   btnFinish.disabled = true;
 }
 
@@ -418,15 +447,17 @@ function range(arr,key){if(!arr.length)return 0;const v=arr.map(x=>x[key]);retur
 function meanAbsDelta(arr,key){if(arr.length<2)return 0;let total=0;for(let i=1;i<arr.length;i++)total+=Math.abs(arr[i][key]-arr[i-1][key]);return total/(arr.length-1)}
 function fmt(n,digits=1){return Number.isFinite(n)?n.toFixed(digits):'—'}
 
-const CONNECTIONS=[[11,13],[13,15],[12,14],[14,16],[11,12],[23,24],[11,23],[12,24],[23,25],[25,27],[27,31],[24,26],[26,28],[28,32]];
+const CONNECTIONS=[[0,7],[0,8],[7,11],[8,12],[11,13],[13,15],[15,17],[15,19],[15,21],[12,14],[14,16],[16,18],[16,20],[16,22],[11,12],[23,24],[11,23],[12,24],[23,25],[25,27],[27,29],[29,31],[27,31],[24,26],[26,28],[28,30],[30,32],[28,32]];
 
 function loop(){
   if(!running)return;
   try{
-    if(video.currentTime!==lastVideoTime && poseLandmarker){
+    const now=performance.now();
+    if(video.currentTime!==lastVideoTime && poseLandmarker && now-lastInferenceAt>=70){
       lastVideoTime=video.currentTime;
-      const result=poseLandmarker.detectForVideo(video,performance.now());
-      processFrame(result);
+      lastInferenceAt=now;
+      const result=poseLandmarker.detectForVideo(video,now);
+      processFrame(result,now);
     }
   }catch(err){
     console.error(err);
@@ -435,43 +466,92 @@ function loop(){
   rafId=requestAnimationFrame(loop);
 }
 
-function processFrame(result){
+function getVideoViewport(){
   const rect=video.getBoundingClientRect();
-  ctx.clearRect(0,0,rect.width,rect.height);
-  const lm=result.landmarks?.[0];
-  const world=result.worldLandmarks?.[0];
-  if(!lm){
-    setFeedback('warn','👀','Corps non détecté. Reculez légèrement ou améliorez la lumière.');
-    return;
-  }
-
-  const upperIds=[11,12,13,14,15,16,23,24];
-  const postureIds=[11,12,23,24];
-  const fullIds=[11,12,23,24,25,26,27,28,31,32];
-  const keyIds=selectedTraining==='cadre'?upperIds:selectedTraining==='posture'?postureIds:fullIds;
-  const visibilities=keyIds.map(i=>lm[i]?.visibility ?? 0);
-  const presences=keyIds.map(i=>lm[i]?.presence ?? 1);
-  const minVisibility=Math.min(...visibilities);
-  const minPresence=Math.min(...presences);
-  if(minVisibility<0.60 || minPresence<0.50){
-    const target=(selectedTraining==='marche'||selectedTraining==='liberte')?'le corps entier, y compris les pieds':'les épaules, les bras et les hanches';
-    setFeedback('warn','👀',`Certains repères sont difficiles à voir. Montrez mieux ${target}.`);
-    return;
-  }
-
-  const outOfFrame=keyIds.some(i=>lm[i].x<0.02||lm[i].x>0.98||lm[i].y<0.02||lm[i].y>0.985);
-  if(outOfFrame){
-    setFeedback('warn','↔️',(selectedTraining==='marche'||selectedTraining==='liberte')?'Une partie du corps sort du cadre. Reculez légèrement.':'Une partie du haut du corps sort du cadre. Reculez légèrement.');
-    return;
-  }
-
   const W=rect.width,H=rect.height;
-  const pt=i=>({x:lm[i].x*W,y:lm[i].y*H});
+  const vw=video.videoWidth||W,vh=video.videoHeight||H;
+  const scale=Math.min(W/vw,H/vh);
+  const drawW=vw*scale,drawH=vh*scale;
+  return {W,H,drawW,drawH,offsetX:(W-drawW)/2,offsetY:(H-drawH)/2,vw,vh};
+}
+
+function landmarkQuality(lm,ids,visibility=0.28,presence=0.30){
+  if(!ids.length)return 0;
+  let ok=0;
+  for(const i of ids){
+    const p=lm[i];
+    if(p && (p.visibility??0)>=visibility && (p.presence??1)>=presence)ok++;
+  }
+  return ok/ids.length;
+}
+
+function inFrame(p,margin=0.015){
+  return p && p.x>=margin && p.x<=1-margin && p.y>=margin && p.y<=1-margin;
+}
+
+function processFrame(result,now=performance.now()){
+  const viewport=getVideoViewport();
+  ctx.clearRect(0,0,viewport.W,viewport.H);
+  const detected=result.landmarks?.[0];
+  const world=result.worldLandmarks?.[0];
+
+  if(!detected){
+    if(lastPoseLandmarks && now-lastPoseSeenAt<=POSE_GRACE_MS){
+      drawSkeleton(lastPoseLandmarks,viewport,0.34);
+      setFeedback('warn','↻','Suivi temporairement incertain pendant le pivot. Continuez le mouvement.');
+      camStatus.textContent='Suivi du corps…';
+    }else{
+      setFeedback('warn','👀','Corps non détecté. Gardez la tête et les pieds visibles, puis reculez légèrement si besoin.');
+      camStatus.textContent='Recherche du corps entier…';
+    }
+    return;
+  }
+
+  const lm=detected;
+  lastPoseLandmarks=lm.map(p=>({...p}));
+  lastPoseSeenAt=now;
+  drawSkeleton(lm,viewport,1);
+
+  const coreIds=[11,12,23,24];
+  const armIds=[11,12,13,14,15,16];
+  const legIds=[23,24,25,26,27,28,29,30,31,32];
+  const coreQuality=landmarkQuality(lm,coreIds,0.30,0.30);
+  const armQuality=landmarkQuality(lm,armIds,0.24,0.28);
+  const legQuality=landmarkQuality(lm,legIds,0.20,0.25);
+  const allVisibleIds=[11,12,13,14,15,16,23,24,25,26,27,28,29,30,31,32];
+  const visibilities=allVisibleIds.map(i=>lm[i]?.visibility ?? 0).filter(Number.isFinite);
+  const presences=allVisibleIds.map(i=>lm[i]?.presence ?? 1).filter(Number.isFinite);
+  const visibilityMedian=medianNumber(visibilities);
+  const presenceMedian=medianNumber(presences);
+
+  const bodyFrameIds=[0,11,12,23,24,27,28,31,32];
+  const inFrameRatio=bodyFrameIds.filter(i=>inFrame(lm[i])).length/bodyFrameIds.length;
+  if(inFrameRatio<0.78){
+    setFeedback('warn','↔️','Gardez la tête et les pieds dans l’image. Reculez légèrement si nécessaire.');
+    camStatus.textContent='Corps entier partiellement hors cadre';
+    return;
+  }
+
+  const enoughForMode = selectedTraining==='cadre'
+    ? coreQuality>=0.75 && armQuality>=0.50
+    : selectedTraining==='posture'
+      ? coreQuality>=0.75
+      : coreQuality>=0.75 && legQuality>=0.50;
+
+  if(!enoughForMode){
+    setFeedback('warn','👀','Je vois encore votre corps, mais certains repères sont masqués. Continuez doucement le pivot ou ajustez la distance.');
+    camStatus.textContent='Suivi partiel — analyse en pause';
+    return;
+  }
+
+  const sourceW=video.videoWidth||720,sourceH=video.videoHeight||1280;
+  const pt=i=>({x:lm[i].x*sourceW,y:lm[i].y*sourceH});
   const shL=pt(11),shR=pt(12),elL=pt(13),elR=pt(14),wrL=pt(15),wrR=pt(16),hipL=pt(23),hipR=pt(24);
   const shMid=mid(shL,shR),hipMid=mid(hipL,hipR);
   const torso=dist(shMid,hipMid)||1;
   const shAngle=lineAngle(shL,shR),hipAngle=lineAngle(hipL,hipR);
-  let torsion=Math.abs(shAngle-hipAngle);if(torsion>90)torsion=180-torsion;
+  const rawAngleDiff=Math.abs((((shAngle-hipAngle)+180)%360+360)%360-180);
+  const torsion=rawAngleDiff>90?180-rawAngleDiff:rawAngleDiff;
   const raw={
     armL:(wrL.y-shL.y)/torso,
     armR:(wrR.y-shR.y)/torso,
@@ -484,23 +564,22 @@ function processFrame(result){
     shoulderTilt:Math.abs(shL.y-shR.y)/torso,
     shoulderTiltSigned:(shR.y-shL.y)/torso,
     hipTiltSigned:(hipR.y-hipL.y)/torso,
-    hipX:1-(hipMid.x/W),
-    hipY:hipMid.y/H,
+    hipX:1-(lm[23].x+lm[24].x)/2,
+    hipY:(lm[23].y+lm[24].y)/2,
     ankleLX:1-(lm[27]?.x ?? .5),
     ankleLY:lm[27]?.y ?? .5,
     ankleRX:1-(lm[28]?.x ?? .5),
     ankleRY:lm[28]?.y ?? .5,
-    visibility:minVisibility,
-    presence:minPresence,
-    t:performance.now()
+    visibility:visibilityMedian,
+    presence:presenceMedian,
+    t:now
   };
   smoothed=smoothMetrics(smoothed,raw,0.22);
 
-  drawSkeleton(lm,W,H);
   if(!analysisActive)return;
 
   let signal=null;
-  if(performance.now()-lastSampleAt>=100){
+  if(now-lastSampleAt>=100){
     const sample={...smoothed};
     if(previousSample){
       sample.moveX=Math.abs(sample.hipX-previousSample.hipX);
@@ -512,29 +591,34 @@ function processFrame(result){
     }
     sessionSamples.push(sample);
     previousSample=sample;
-    lastSampleAt=performance.now();
+    lastSampleAt=now;
     if(selectedTraining==='cadre')signal=cadreEngine.ingest(sample);
     else if(selectedTraining==='posture')signal=postureEngine.ingest(sample);
     else if(selectedTraining==='marche')signal=marcheEngine.ingest(sample);
     else if(selectedTraining==='liberte')signal=liberteEngine.ingest(sample);
   }
 
-  if(selectedTraining==='cadre'||selectedTraining==='posture'||selectedTraining==='marche'||selectedTraining==='liberte'){
-    if(signal){
-      setFeedback(signal.kind,signal.symbol,signal.text);
-      if(signal.phase==='baseline'){
-        camStatus.textContent='Création de votre repère de départ…';
-      }else if(signal.phase==='ready'||signal.phase==='analysis'){
-        camStatus.textContent='Analyse locale en cours';
-        btnFinish.disabled=false;
-        if(selectedTraining==='cadre')document.getElementById('session-label').textContent='FrameCheck compare les variations à votre propre repère de départ, pas à une posture universelle.';
-        if(selectedTraining==='posture')document.getElementById('session-label').textContent='FrameCheck observe les variations visibles par rapport à votre repère de départ. Le placement du téléphone influence la mesure.';
-        if(selectedTraining==='liberte')document.getElementById('session-label').textContent='FrameCheck décrit la variété visible du mouvement, pas la créativité artistique.';
-      }
+  if(signal){
+    setFeedback(signal.kind,signal.symbol,signal.text);
+    if(signal.phase==='baseline'){
+      camStatus.textContent='Création de votre repère de départ…';
+    }else if(signal.phase==='ready'||signal.phase==='analysis'){
+      camStatus.textContent='Corps entier suivi — analyse locale';
+      btnFinish.disabled=false;
+      if(selectedTraining==='cadre')document.getElementById('session-label').textContent='FrameCheck compare les variations à votre propre repère de départ, pas à une posture universelle.';
+      if(selectedTraining==='posture')document.getElementById('session-label').textContent='FrameCheck observe les variations visibles par rapport à votre repère de départ. Le placement du téléphone influence la mesure.';
+      if(selectedTraining==='liberte')document.getElementById('session-label').textContent='FrameCheck décrit la variété visible du mouvement, pas la créativité artistique.';
     }
-    return;
   }
 }
+
+function medianNumber(values){
+  const a=values.filter(Number.isFinite).sort((x,y)=>x-y);
+  if(!a.length)return 0;
+  const m=Math.floor(a.length/2);
+  return a.length%2?a[m]:(a[m-1]+a[m])/2;
+}
+
 function smoothMetrics(prev,next,a){
   if(!prev)return{...next};
   const out={...next};
@@ -545,11 +629,24 @@ function smoothMetrics(prev,next,a){
   return out;
 }
 
-function drawSkeleton(lm,W,H){
-  const pt=i=>({x:lm[i].x*W,y:lm[i].y*H});
-  ctx.lineWidth=3;ctx.lineCap='round';ctx.strokeStyle='rgba(88,224,181,.9)';ctx.fillStyle='#fff';
-  CONNECTIONS.forEach(([a,b])=>{const p1=pt(a),p2=pt(b);ctx.beginPath();ctx.moveTo(p1.x,p1.y);ctx.lineTo(p2.x,p2.y);ctx.stroke()});
-  [11,12,13,14,15,16,23,24,25,26,27,28,31,32].forEach(i=>{const p=pt(i);ctx.beginPath();ctx.arc(p.x,p.y,4,0,Math.PI*2);ctx.fill()});
+function drawSkeleton(lm,viewport,opacity=1){
+  const {drawW,drawH,offsetX,offsetY}=viewport;
+  const pt=i=>({x:offsetX+lm[i].x*drawW,y:offsetY+lm[i].y*drawH});
+  ctx.lineWidth=3;ctx.lineCap='round';ctx.lineJoin='round';
+  CONNECTIONS.forEach(([a,b])=>{
+    const A=lm[a],B=lm[b];
+    if(!A||!B)return;
+    const conf=Math.max(0.12,Math.min(1,Math.min(A.visibility??1,B.visibility??1)));
+    const p1=pt(a),p2=pt(b);
+    ctx.strokeStyle=`rgba(88,224,181,${Math.min(0.95,opacity*(0.28+0.72*conf))})`;
+    ctx.beginPath();ctx.moveTo(p1.x,p1.y);ctx.lineTo(p2.x,p2.y);ctx.stroke();
+  });
+  [0,7,8,11,12,13,14,15,16,23,24,25,26,27,28,29,30,31,32].forEach(i=>{
+    const P=lm[i];if(!P)return;
+    const p=pt(i),conf=Math.max(0.16,Math.min(1,P.visibility??1));
+    ctx.fillStyle=`rgba(255,255,255,${Math.min(1,opacity*(0.35+0.65*conf))})`;
+    ctx.beginPath();ctx.arc(p.x,p.y,i===0?4.5:3.5,0,Math.PI*2);ctx.fill();
+  });
 }
 
 document.getElementById('btn-finish').addEventListener('click',()=>finishSession());
