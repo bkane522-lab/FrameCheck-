@@ -70,9 +70,16 @@ p{font-size:17px;line-height:1.55;margin:0;color:var(--muted)}
 .cam-wrap video{object-fit:contain}
 .cam-wrap canvas{object-fit:fill}
 .cam-wrap video{opacity:1}
-.cam-wrap canvas{pointer-events:none}
-.cam-status{position:absolute;left:14px;right:14px;top:14px;padding:10px 12px;border-radius:12px;background:rgba(4,8,18,.74);backdrop-filter:blur(8px);font-size:14px;font-weight:750;line-height:1.35}
-.countdown{position:absolute;inset:0;display:none;place-items:center;background:rgba(2,4,10,.48);font-size:clamp(72px,24vw,128px);font-weight:900;text-shadow:0 3px 24px #000}
+.cam-wrap canvas{pointer-events:none;z-index:2}
+.floor-guides{position:absolute;pointer-events:none;z-index:3;opacity:.82;filter:drop-shadow(0 1px 2px rgba(0,0,0,.8))}
+.floor-guides[hidden]{display:none}
+.floor-guides .lane{stroke:rgba(88,224,181,.92);stroke-width:.6;vector-effect:non-scaling-stroke}
+.floor-guides .center-line{stroke:rgba(255,255,255,.82);stroke-width:.55;stroke-dasharray:2.2 2.2;vector-effect:non-scaling-stroke}
+.floor-guides .base-line{stroke:rgba(255,209,102,.9);stroke-width:.6;stroke-dasharray:3 2;vector-effect:non-scaling-stroke}
+.floor-guides .pivot{fill:rgba(88,224,181,.10);stroke:rgba(88,224,181,.95);stroke-width:.7;vector-effect:non-scaling-stroke}
+.floor-guides .pivot-cross{stroke:rgba(255,255,255,.9);stroke-width:.55;vector-effect:non-scaling-stroke}
+.cam-status{position:absolute;z-index:5;left:14px;right:14px;top:14px;padding:10px 12px;border-radius:12px;background:rgba(4,8,18,.74);backdrop-filter:blur(8px);font-size:14px;font-weight:750;line-height:1.35}
+.countdown{position:absolute;z-index:6;inset:0;display:none;place-items:center;background:rgba(2,4,10,.48);font-size:clamp(72px,24vw,128px);font-weight:900;text-shadow:0 3px 24px #000}
 .countdown.show{display:grid}
 .camera-body{padding:16px 18px 0}
 .feedback{min-height:78px;border:1px solid var(--line);border-radius:16px;background:var(--panel);padding:16px;display:flex;align-items:center;gap:12px}
@@ -82,6 +89,9 @@ p{font-size:17px;line-height:1.55;margin:0;color:var(--muted)}
 .feedback.warn{background:var(--warn-dark);border-color:#7c6222}
 .feedback.danger{background:var(--danger-dark);border-color:#743039}
 .session-label{margin-top:10px;text-align:center;color:var(--muted);font-size:14px}
+.guide-toggle{margin:12px auto 0;width:auto;min-height:42px;padding:9px 14px;border-radius:999px;border:1px solid var(--line);background:var(--panel2);color:var(--text);font-weight:750;font-size:14px;cursor:pointer}
+.guide-toggle[aria-pressed="true"]{border-color:#2d7e68;background:var(--accent-dark);color:#dcfff3}
+.floor-note{margin-top:9px;text-align:center;color:var(--muted);font-size:12px;line-height:1.4}
 .result-card{margin-top:22px;border:1px solid var(--line);border-radius:18px;background:var(--panel);overflow:hidden}
 .result-row{display:flex;justify-content:space-between;align-items:center;gap:18px;padding:17px 16px;border-bottom:1px solid var(--line)}
 .result-row:last-child{border-bottom:0}
@@ -168,6 +178,15 @@ p{font-size:17px;line-height:1.55;margin:0;color:var(--muted)}
         <div class="cam-wrap">
           <video id="video" playsinline autoplay muted aria-label="Aperçu de la caméra"></video>
           <canvas id="overlay" aria-hidden="true"></canvas>
+          <svg id="floor-guides" class="floor-guides" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+            <line class="lane" x1="46" y1="55" x2="18" y2="100"/>
+            <line class="lane" x1="54" y1="55" x2="82" y2="100"/>
+            <line class="center-line" x1="50" y1="54" x2="50" y2="100"/>
+            <line class="base-line" x1="18" y1="88" x2="82" y2="88"/>
+            <ellipse class="pivot" cx="50" cy="83" rx="8" ry="2.8"/>
+            <line class="pivot-cross" x1="46" y1="83" x2="54" y2="83"/>
+            <line class="pivot-cross" x1="50" y1="80.5" x2="50" y2="85.5"/>
+          </svg>
           <div id="cam-status" class="cam-status">Préparation de la caméra…</div>
           <div id="countdown" class="countdown" aria-live="assertive">3</div>
         </div>
@@ -177,6 +196,8 @@ p{font-size:17px;line-height:1.55;margin:0;color:var(--muted)}
             <div class="symbol">👀</div><div class="text">Placez-vous entièrement dans le cadre.</div>
           </div>
           <div id="session-label" class="session-label">Les observations affichées sont indicatives.</div>
+          <button id="btn-guides" class="guide-toggle" type="button" aria-pressed="true">Repères au sol : ACTIVÉS</button>
+          <div class="floor-note">Guide visuel uniquement : les lignes ne calibrent pas le sol réel de la pièce.</div>
           <div class="actions">
             <button id="btn-finish" class="btn btn-primary" disabled>TERMINER LA SESSION</button>
             <button id="btn-cancel" class="btn btn-secondary">QUITTER</button>
@@ -207,11 +228,14 @@ import { CadreEngine, angle3D } from "./cadre-engine.mjs";
 import { PostureEngine } from "./posture-engine.mjs";
 import { MarcheEngine } from "./marche-engine.mjs";
 import { LiberteEngine } from "./liberte-engine.mjs";
+import { classifyPose, metricConfidence, pointUsable } from "./tracking-engine.mjs";
 
 const screens = [...document.querySelectorAll('.screen')];
 const video = document.getElementById('video');
 const canvas = document.getElementById('overlay');
 const ctx = canvas.getContext('2d');
+const floorGuides = document.getElementById('floor-guides');
+const btnGuides = document.getElementById('btn-guides');
 const camStatus = document.getElementById('cam-status');
 const countdown = document.getElementById('countdown');
 const feedback = document.getElementById('feedback');
@@ -245,7 +269,31 @@ let smoothed = null;
 let lastInferenceAt = 0;
 let lastPoseLandmarks = null;
 let lastPoseSeenAt = 0;
-const POSE_GRACE_MS = 700;
+const POSE_GRACE_MS = 1100;
+let preflightActive = false;
+let framingReadySince = 0;
+let lastTrackingState = 'idle';
+let lossStartedAt = 0;
+let trackingStats = null;
+
+function newTrackingStats(){return {frames:0,valid:0,partial:0,lost:0,pivot:0,reacquisitions:0,longestLossMs:0}}
+function resetTrackingStats(){trackingStats=newTrackingStats();lastTrackingState='idle';lossStartedAt=0}
+function noteTracking(state,pivotLike,now){
+  if(!analysisActive||!trackingStats)return;
+  trackingStats.frames++;
+  if(state==='valid')trackingStats.valid++;else if(state==='partial')trackingStats.partial++;else trackingStats.lost++;
+  if(pivotLike)trackingStats.pivot++;
+  if(state==='lost'){if(!lossStartedAt)lossStartedAt=now;}
+  else if(lossStartedAt){const d=now-lossStartedAt;trackingStats.longestLossMs=Math.max(trackingStats.longestLossMs,d);if(lastTrackingState==='lost')trackingStats.reacquisitions++;lossStartedAt=0;}
+  lastTrackingState=state;
+}
+function trackingDiagnostic(){
+  const t=trackingStats||newTrackingStats(),total=Math.max(1,t.frames);
+  const validRatio=t.valid/total,partialRatio=t.partial/total,lostRatio=t.lost/total;
+  const label=validRatio>=.82&&lostRatio<=.08?'Stable':validRatio>=.62&&lostRatio<=.20?'Variable':'À améliorer';
+  const currentLossMs=lossStartedAt&&lastTrackingState==='lost'?performance.now()-lossStartedAt:0;
+  return {...t,total,validRatio,partialRatio,lostRatio,label,longestLossMs:Math.max(t.longestLossMs,currentLossMs)};
+}
 
 function showScreen(name){
   screens.forEach(s=>s.classList.toggle('active', s.id === `screen-${name}`));
@@ -267,19 +315,19 @@ function setTraining(key){
   const g1=document.getElementById('guide-1'),g2=document.getElementById('guide-2'),g3=document.getElementById('guide-3');
   if(key==='cadre'){
     g1.textContent='Gardez tout le corps visible : tête, épaules, hanches, genoux et pieds.';
-    g2.textContent='Reculez assez pour laisser une petite marge au-dessus de la tête et sous les pieds.';
+    g2.textContent='Reculez assez pour laisser une petite marge au-dessus de la tête et sous les pieds. Le compte à rebours ne démarre que lorsque le corps entier est cadré.';
     g3.textContent='Commencez avec votre cadre naturel : FrameCheck l’utilisera comme repère personnel.';
   }else if(key==='posture'){
     g1.textContent='Gardez tout le corps visible, de la tête jusqu’aux pieds.';
-    g2.textContent='Posez le téléphone verticalement sur un support stable, sans zoom numérique.';
+    g2.textContent='Posez le téléphone verticalement sur un support stable, sans zoom numérique. Le compte à rebours attend automatiquement la tête et les pieds.';
     g3.textContent='Gardez votre posture naturelle environ 2 secondes : elle servira de repère personnel.';
   }else if(key==='marche'){
     g1.textContent='Gardez le corps entier visible, y compris les chevilles et les pieds.';
-    g2.textContent='Posez le téléphone sur un support stable et laissez de l’espace pour marcher.';
+    g2.textContent='Posez le téléphone sur un support stable et laissez de l’espace pour marcher. FrameCheck vérifie le corps entier avant de démarrer.';
     g3.textContent='Marchez naturellement : FrameCheck observe le déplacement, la continuité et l’alternance visible des pieds.';
   }else{
     g1.textContent='Gardez votre corps entier visible dans le cadre.';
-    g2.textContent='Posez le téléphone sur un support stable.';
+    g2.textContent='Posez le téléphone sur un support stable. FrameCheck vérifie le corps entier avant de démarrer, puis tolère les occultations pendant les pivots.';
     g3.textContent='Bougez librement : FrameCheck observe amplitudes, déplacements, changements de hauteur, rotations et répétitions visibles.';
   }
   showScreen('setup');
@@ -360,10 +408,22 @@ async function startCamera(){
     lastPoseLandmarks = null;
     lastPoseSeenAt = 0;
     btnFinish.disabled = true;
-    camStatus.textContent = 'Placez votre corps dans le cadre.';
-    setFeedback('', '👀', 'Placez-vous entièrement dans le cadre.');
+    preflightActive = true;
+    framingReadySince = 0;
+    resetTrackingStats();
+    camStatus.textContent = 'Cadrage corps entier…';
+    setFeedback('', '👣', 'Reculez jusqu’à voir votre tête et vos pieds. Le compte à rebours démarrera automatiquement.');
     loop();
-    await runCountdown();
+    while(running){
+      const framed = await waitForFullBodyReady();
+      if(!framed) return;
+      camStatus.textContent = 'Corps entier détecté — restez en place.';
+      await runCountdown();
+      if(!running) return;
+      if(framingReadySince && performance.now()-lastPoseSeenAt<500) break;
+      setFeedback('warn','👣','Vous êtes sorti du cadrage pendant le compte à rebours. Replacez tête et pieds dans l’image.');
+    }
+    preflightActive = false;
     analysisActive = true;
     const needsBaseline = selectedTraining==='cadre' || selectedTraining==='posture';
     btnFinish.disabled = needsBaseline;
@@ -420,7 +480,21 @@ async function runCountdown(){
   countdown.classList.remove('show');
 }
 
+async function waitForFullBodyReady(){
+  while(running){
+    if(framingReadySince && performance.now()-framingReadySince>=900) return true;
+    await new Promise(resolve=>setTimeout(resolve,90));
+  }
+  return false;
+}
+
 document.getElementById('btn-camera').addEventListener('click', startCamera);
+btnGuides.addEventListener('click',()=>{
+  const enabled = btnGuides.getAttribute('aria-pressed') !== 'true';
+  btnGuides.setAttribute('aria-pressed', String(enabled));
+  btnGuides.textContent = `Repères au sol : ${enabled ? 'ACTIVÉS' : 'MASQUÉS'}`;
+  floorGuides.hidden = !enabled;
+});
 window.addEventListener('resize',resizeCanvas);
 
 function resizeCanvas(){
@@ -429,6 +503,16 @@ function resizeCanvas(){
   canvas.width = Math.max(1, Math.round(rect.width * ratio));
   canvas.height = Math.max(1, Math.round(rect.height * ratio));
   ctx.setTransform(ratio,0,0,ratio,0,0);
+  updateFloorGuideViewport();
+}
+
+function updateFloorGuideViewport(){
+  if(!floorGuides) return;
+  const viewport=getVideoViewport();
+  floorGuides.style.left=`${viewport.offsetX}px`;
+  floorGuides.style.top=`${viewport.offsetY}px`;
+  floorGuides.style.width=`${viewport.drawW}px`;
+  floorGuides.style.height=`${viewport.drawH}px`;
 }
 
 function dist(a,b){return Math.hypot(a.x-b.x,a.y-b.y)}
@@ -442,9 +526,9 @@ function angleAt(a,b,c){
 }
 function angleFromVertical(p1,p2){return Math.atan2(Math.abs(p2.x-p1.x),Math.abs(p2.y-p1.y))*180/Math.PI}
 function lineAngle(p1,p2){return Math.atan2(p2.y-p1.y,p2.x-p1.x)*180/Math.PI}
-function average(arr,key){return arr.length?arr.reduce((sum,x)=>sum+(x[key]??0),0)/arr.length:0}
-function range(arr,key){if(!arr.length)return 0;const v=arr.map(x=>x[key]);return Math.max(...v)-Math.min(...v)}
-function meanAbsDelta(arr,key){if(arr.length<2)return 0;let total=0;for(let i=1;i<arr.length;i++)total+=Math.abs(arr[i][key]-arr[i-1][key]);return total/(arr.length-1)}
+function average(arr,key){const v=arr.map(x=>x[key]).filter(Number.isFinite);return v.length?v.reduce((a,b)=>a+b,0)/v.length:NaN}
+function range(arr,key){const v=arr.map(x=>x[key]).filter(Number.isFinite);return v.length?Math.max(...v)-Math.min(...v):0}
+function meanAbsDelta(arr,key){const v=arr.map(x=>x[key]).filter(Number.isFinite);if(v.length<2)return 0;let total=0;for(let i=1;i<v.length;i++)total+=Math.abs(v[i]-v[i-1]);return total/(v.length-1)}
 function fmt(n,digits=1){return Number.isFinite(n)?n.toFixed(digits):'—'}
 
 const CONNECTIONS=[[0,7],[0,8],[7,11],[8,12],[11,13],[13,15],[15,17],[15,19],[15,21],[12,14],[14,16],[16,18],[16,20],[16,22],[11,12],[23,24],[11,23],[12,24],[23,25],[25,27],[27,29],[29,31],[27,31],[24,26],[26,28],[28,30],[30,32],[28,32]];
@@ -496,12 +580,14 @@ function processFrame(result,now=performance.now()){
   const world=result.worldLandmarks?.[0];
 
   if(!detected){
+    noteTracking('lost',false,now);
+    framingReadySince=0;
     if(lastPoseLandmarks && now-lastPoseSeenAt<=POSE_GRACE_MS){
-      drawSkeleton(lastPoseLandmarks,viewport,0.34);
-      setFeedback('warn','↻','Suivi temporairement incertain pendant le pivot. Continuez le mouvement.');
-      camStatus.textContent='Suivi du corps…';
+      drawSkeleton(lastPoseLandmarks,viewport,0.28);
+      setFeedback('warn','↻','Suivi momentanément perdu. Continuez doucement : FrameCheck cherche à vous retrouver.');
+      camStatus.textContent='Reconnexion du squelette…';
     }else{
-      setFeedback('warn','👀','Corps non détecté. Gardez la tête et les pieds visibles, puis reculez légèrement si besoin.');
+      setFeedback('warn','👀','Corps non détecté. Gardez la tête et les pieds visibles puis ajustez légèrement la distance.');
       camStatus.textContent='Recherche du corps entier…';
     }
     return;
@@ -512,35 +598,34 @@ function processFrame(result,now=performance.now()){
   lastPoseSeenAt=now;
   drawSkeleton(lm,viewport,1);
 
-  const coreIds=[11,12,23,24];
-  const armIds=[11,12,13,14,15,16];
-  const legIds=[23,24,25,26,27,28,29,30,31,32];
-  const coreQuality=landmarkQuality(lm,coreIds,0.30,0.30);
-  const armQuality=landmarkQuality(lm,armIds,0.24,0.28);
-  const legQuality=landmarkQuality(lm,legIds,0.20,0.25);
-  const allVisibleIds=[11,12,13,14,15,16,23,24,25,26,27,28,29,30,31,32];
-  const visibilities=allVisibleIds.map(i=>lm[i]?.visibility ?? 0).filter(Number.isFinite);
-  const presences=allVisibleIds.map(i=>lm[i]?.presence ?? 1).filter(Number.isFinite);
-  const visibilityMedian=medianNumber(visibilities);
-  const presenceMedian=medianNumber(presences);
+  const tracking=classifyPose({landmarks:lm,worldLandmarks:world,mode:selectedTraining,preflight:preflightActive});
 
-  const bodyFrameIds=[0,11,12,23,24,27,28,31,32];
-  const inFrameRatio=bodyFrameIds.filter(i=>inFrame(lm[i])).length/bodyFrameIds.length;
-  if(inFrameRatio<0.78){
-    setFeedback('warn','↔️','Gardez la tête et les pieds dans l’image. Reculez légèrement si nécessaire.');
-    camStatus.textContent='Corps entier partiellement hors cadre';
+  if(preflightActive){
+    if(tracking.fullBodyReady){
+      if(!framingReadySince)framingReadySince=now;
+      const left=Math.max(0,900-(now-framingReadySince));
+      setFeedback('good','✓',left>120?'Corps entier détecté. Restez immobile un instant.':'Cadrage validé.');
+      camStatus.textContent='Tête + pieds visibles — cadrage validé';
+    }else{
+      framingReadySince=0;
+      if(tracking.footFrameRatio<0.75){
+        setFeedback('warn','👣','Vos pieds ne sont pas entièrement visibles. Reculez le téléphone ou éloignez-vous légèrement.');
+        camStatus.textContent='Cadrage incomplet — pieds manquants';
+      }else if(tracking.bodySpan<0.52){
+        setFeedback('warn','↔️','Votre corps est visible mais trop petit dans l’image. Rapprochez légèrement le téléphone si possible.');
+        camStatus.textContent='Ajustement du cadrage';
+      }else{
+        setFeedback('warn','👀','Gardez la tête, le bassin et les pieds visibles quelques instants.');
+        camStatus.textContent='Stabilisation du corps entier…';
+      }
+    }
     return;
   }
 
-  const enoughForMode = selectedTraining==='cadre'
-    ? coreQuality>=0.75 && armQuality>=0.50
-    : selectedTraining==='posture'
-      ? coreQuality>=0.75
-      : coreQuality>=0.75 && legQuality>=0.50;
-
-  if(!enoughForMode){
-    setFeedback('warn','👀','Je vois encore votre corps, mais certains repères sont masqués. Continuez doucement le pivot ou ajustez la distance.');
-    camStatus.textContent='Suivi partiel — analyse en pause';
+  noteTracking(tracking.state,tracking.pivotLike,now);
+  if(tracking.state!=='valid'){
+    setFeedback('warn','↻',tracking.pivotLike?'Pivot en cours : certains repères sont masqués. Le suivi continue sans forcer de mesure.':'Certains repères sont trop incertains. Restez dans le cadre et continuez doucement.');
+    camStatus.textContent=tracking.pivotLike?'Pivot partiellement suivi':'Suivi partiel — mesures en pause';
     return;
   }
 
@@ -552,26 +637,35 @@ function processFrame(result,now=performance.now()){
   const shAngle=lineAngle(shL,shR),hipAngle=lineAngle(hipL,hipR);
   const rawAngleDiff=Math.abs((((shAngle-hipAngle)+180)%360+360)%360-180);
   const torsion=rawAngleDiff>90?180-rawAngleDiff:rawAngleDiff;
+
+  const leftArmOK=metricConfidence(lm,[11,13,15],0.18)>=0.66;
+  const rightArmOK=metricConfidence(lm,[12,14,16],0.18)>=0.66;
+  const coreOK=metricConfidence(lm,[11,12,23,24],0.22)>=0.75;
+  const leftAnkleOK=pointUsable(lm,27,0.14);
+  const rightAnkleOK=pointUsable(lm,28,0.14);
+
   const raw={
-    armL:(wrL.y-shL.y)/torso,
-    armR:(wrR.y-shR.y)/torso,
-    elbowL:angleAt(shL,elL,wrL),
-    elbowR:angleAt(shR,elR,wrR),
-    elbowL3D:world?angle3D(world[11],world[13],world[15]):NaN,
-    elbowR3D:world?angle3D(world[12],world[14],world[16]):NaN,
-    back:angleFromVertical(hipMid,shMid),
-    torsion,
-    shoulderTilt:Math.abs(shL.y-shR.y)/torso,
-    shoulderTiltSigned:(shR.y-shL.y)/torso,
-    hipTiltSigned:(hipR.y-hipL.y)/torso,
-    hipX:1-(lm[23].x+lm[24].x)/2,
-    hipY:(lm[23].y+lm[24].y)/2,
-    ankleLX:1-(lm[27]?.x ?? .5),
-    ankleLY:lm[27]?.y ?? .5,
-    ankleRX:1-(lm[28]?.x ?? .5),
-    ankleRY:lm[28]?.y ?? .5,
-    visibility:visibilityMedian,
-    presence:presenceMedian,
+    armL:leftArmOK?(wrL.y-shL.y)/torso:NaN,
+    armR:rightArmOK?(wrR.y-shR.y)/torso:NaN,
+    elbowL:leftArmOK?angleAt(shL,elL,wrL):NaN,
+    elbowR:rightArmOK?angleAt(shR,elR,wrR):NaN,
+    elbowL3D:leftArmOK&&world?angle3D(world[11],world[13],world[15]):NaN,
+    elbowR3D:rightArmOK&&world?angle3D(world[12],world[14],world[16]):NaN,
+    back:coreOK?angleFromVertical(hipMid,shMid):NaN,
+    torsion:coreOK?torsion:NaN,
+    shoulderTilt:coreOK?Math.abs(shL.y-shR.y)/torso:NaN,
+    shoulderTiltSigned:coreOK?(shR.y-shL.y)/torso:NaN,
+    hipTiltSigned:coreOK?(hipR.y-hipL.y)/torso:NaN,
+    hipX:coreOK?1-(lm[23].x+lm[24].x)/2:NaN,
+    hipY:coreOK?(lm[23].y+lm[24].y)/2:NaN,
+    ankleLX:leftAnkleOK?1-lm[27].x:NaN,
+    ankleLY:leftAnkleOK?lm[27].y:NaN,
+    ankleRX:rightAnkleOK?1-lm[28].x:NaN,
+    ankleRY:rightAnkleOK?lm[28].y:NaN,
+    visibility:medianNumber([11,12,13,14,15,16,23,24,25,26,27,28].map(i=>lm[i]?.visibility??0)),
+    presence:medianNumber([11,12,13,14,15,16,23,24,25,26,27,28].map(i=>lm[i]?.presence??1)),
+    turnScore:tracking.turnScore,
+    pivotLike:tracking.pivotLike?1:0,
     t:now
   };
   smoothed=smoothMetrics(smoothed,raw,0.22);
@@ -580,12 +674,13 @@ function processFrame(result,now=performance.now()){
 
   let signal=null;
   if(now-lastSampleAt>=100){
-    const sample={...smoothed};
+    const sample={...smoothed,turnScore:raw.turnScore,pivotLike:raw.pivotLike};
     if(previousSample){
-      sample.moveX=Math.abs(sample.hipX-previousSample.hipX);
-      sample.moveY=Math.abs(sample.hipY-previousSample.hipY);
-      sample.armChange=(Math.abs(sample.armL-previousSample.armL)+Math.abs(sample.armR-previousSample.armR))/2;
-      sample.rotationChange=Math.abs(sample.torsion-previousSample.torsion);
+      sample.moveX=Number.isFinite(sample.hipX)&&Number.isFinite(previousSample.hipX)?Math.abs(sample.hipX-previousSample.hipX):NaN;
+      sample.moveY=Number.isFinite(sample.hipY)&&Number.isFinite(previousSample.hipY)?Math.abs(sample.hipY-previousSample.hipY):NaN;
+      const armD=[Number.isFinite(sample.armL)&&Number.isFinite(previousSample.armL)?Math.abs(sample.armL-previousSample.armL):NaN,Number.isFinite(sample.armR)&&Number.isFinite(previousSample.armR)?Math.abs(sample.armR-previousSample.armR):NaN].filter(Number.isFinite);
+      sample.armChange=armD.length?armD.reduce((a,b)=>a+b,0)/armD.length:NaN;
+      sample.rotationChange=Number.isFinite(sample.torsion)&&Number.isFinite(previousSample.torsion)?Math.abs(sample.torsion-previousSample.torsion):NaN;
     }else{
       sample.moveX=sample.moveY=sample.armChange=sample.rotationChange=0;
     }
@@ -603,10 +698,11 @@ function processFrame(result,now=performance.now()){
     if(signal.phase==='baseline'){
       camStatus.textContent='Création de votre repère de départ…';
     }else if(signal.phase==='ready'||signal.phase==='analysis'){
-      camStatus.textContent='Corps entier suivi — analyse locale';
+      camStatus.textContent=tracking.pivotLike?'Pivot / rotation suivi — analyse locale':'Corps entier suivi — analyse locale';
       btnFinish.disabled=false;
-      if(selectedTraining==='cadre')document.getElementById('session-label').textContent='FrameCheck compare les variations à votre propre repère de départ, pas à une posture universelle.';
+      if(selectedTraining==='cadre')document.getElementById('session-label').textContent='FrameCheck tolère maintenant qu’un bras soit momentanément masqué pendant un pivot.';
       if(selectedTraining==='posture')document.getElementById('session-label').textContent='FrameCheck observe les variations visibles par rapport à votre repère de départ. Le placement du téléphone influence la mesure.';
+      if(selectedTraining==='marche')document.getElementById('session-label').textContent='Les changements de direction et pivots sont suivis sans exiger que les deux jambes restent visibles en permanence.';
       if(selectedTraining==='liberte')document.getElementById('session-label').textContent='FrameCheck décrit la variété visible du mouvement, pas la créativité artistique.';
     }
   }
@@ -624,7 +720,8 @@ function smoothMetrics(prev,next,a){
   const out={...next};
   for(const key of ['armL','armR','elbowL','elbowR','elbowL3D','elbowR3D','back','torsion','shoulderTilt','shoulderTiltSigned','hipTiltSigned','hipX','hipY','ankleLX','ankleLY','ankleRX','ankleRY','visibility','presence']){
     const pv=prev[key],nv=next[key];
-    out[key]=Number.isFinite(pv)&&Number.isFinite(nv)?pv*(1-a)+nv*a:nv;
+    if(!Number.isFinite(nv)){out[key]=NaN;continue;}
+    out[key]=Number.isFinite(pv)?pv*(1-a)+nv*a:nv;
   }
   return out;
 }
@@ -671,6 +768,13 @@ function finishSession(){
   showScreen('result');
 }
 
+function trackingDetailsHTML(){
+  const t=trackingDiagnostic();
+  if(!t.frames)return '<p><strong>Suivi caméra :</strong> aucune donnée technique de suivi disponible pour cette session.</p>';
+  return `<p><strong>Suivi caméra — ${t.label} :</strong> corps suivi normalement sur ${fmt(t.validRatio*100,0)} % des images analysées · suivi partiel ${fmt(t.partialRatio*100,0)} % · perte complète ${fmt(t.lostRatio*100,0)} %. ${t.pivot} image(s) ont été reconnues comme orientation/pivot plus difficile. ${t.reacquisitions} reconnexion(s) automatique(s).</p>`;
+}
+function setDetails(html){details.innerHTML=html+trackingDetailsHTML()}
+
 function statusClass(value){const watch=['À observer','Peu observé','Variable','Variations visibles','Variation visible','Peu visible','Avec plusieurs pauses','Peu d’alternance détectée','Peu de variation','Motifs souvent répétés'];return watch.includes(value)?'watch':value==='Session courte'?'neutral':''}
 function row(label,value){return `<div class="result-row"><strong>${label}</strong><span class="result-value ${statusClass(value)}">${value}</span></div>`}
 
@@ -683,7 +787,7 @@ function renderResults(samples){
 
   if(!samples.length){
     card.innerHTML=row('Analyse','Aucune mesure exploitable');
-    details.innerHTML='<p>Aucun repère suffisamment fiable n’a été enregistré.</p>';
+    setDetails('<p>Aucun repère suffisamment fiable n’a été enregistré.</p>');
     return;
   }
 
@@ -702,66 +806,67 @@ function renderResults(samples){
     const summary=cadreEngine.summary();
     if(!summary.enough){
       card.innerHTML=row('Cadre','Session courte')+row('Bras','Session courte')+row('Rotation','Session courte');
-      details.innerHTML='<p>Le repère personnel a été créé, mais la phase d’analyse est trop courte pour résumer une tendance.</p><p>Les seuils de variation restent provisoires et devront être calibrés sur des essais réels.</p>';
+      setDetails('<p>Le repère personnel a été créé, mais la phase d’analyse est trop courte pour résumer une tendance.</p><p>Les seuils de variation restent provisoires et devront être calibrés sur des essais réels.</p>');
       return;
     }
-    const armChange=Math.max(summary.leftChangeRatio,summary.rightChangeRatio);
-    const arms=armChange<=0.15?'Proches du repère':armChange<=0.35?'Variable':'Variations visibles';
+    const armRates=[summary.leftChangeRatio,summary.rightChangeRatio].filter(Number.isFinite);
+    const armChange=armRates.length?Math.max(...armRates):NaN;
+    const arms=!Number.isFinite(armChange)?'Suivi partiel':armChange<=0.15?'Proches du repère':armChange<=0.35?'Variable':'Variations visibles';
     const rotation=summary.medianRotationDelta<=12?'Variation faible':'Variation visible';
     card.innerHTML=row('Cadre',summary.label)+row('Bras',arms)+row('Rotation',rotation);
-    details.innerHTML=`
+    setDetails(`
       <p><strong>Repère personnel :</strong> les premières secondes valides de la session servent de référence. FrameCheck compare ensuite les variations à ce repère, et non à une posture Kizomba « idéale ».</p>
       <p>Cadre proche du repère sur ${fmt(summary.stableRatio*100,0)} % des échantillons analysés.</p>
       <p>Variation médiane des bras : ${fmt(summary.medianArmDelta,2)} hauteur de buste · variation médiane de rotation projetée : ${fmt(summary.medianRotationDelta)}°.</p>
       <p>${summary.sampleCount} échantillons ont alimenté le résumé. Les seuils restent provisoires et doivent être calibrés sur des sessions réelles.</p>
-    `;
+    `);
     return;
   }else if(selectedTraining==='posture'){
     const summary=postureEngine.summary();
     if(!summary.enough){
       card.innerHTML=row('Posture','Session courte')+row('Axe du buste','Session courte')+row('Épaules / bassin','Session courte');
-      details.innerHTML='<p>Le repère personnel a été créé, mais la phase d’analyse est trop courte pour résumer une tendance.</p><p>FrameCheck observe ici des variations projetées dans l’image : le placement du téléphone peut modifier les résultats.</p>';
+      setDetails('<p>Le repère personnel a été créé, mais la phase d’analyse est trop courte pour résumer une tendance.</p><p>FrameCheck observe ici des variations projetées dans l’image : le placement du téléphone peut modifier les résultats.</p>');
       return;
     }
     const axis=summary.axisStableRatio>=.85?'Proche du repère':summary.axisStableRatio>=.65?'Variable':'À observer';
     const shoulders=summary.shoulderStableRatio>=.85?'Proches du repère':summary.shoulderStableRatio>=.65?'Variables':'À observer';
     card.innerHTML=row('Posture',summary.label)+row('Axe du buste',axis)+row('Épaules',shoulders);
-    details.innerHTML=`
+    setDetails(`
       <p><strong>Repère personnel :</strong> les premières secondes valides servent de référence. Il ne s’agit pas d’une posture Kizomba universelle.</p>
       <p>Axe proche du repère sur ${fmt(summary.axisStableRatio*100,0)} % des échantillons · épaules sur ${fmt(summary.shoulderStableRatio*100,0)} % · bassin sur ${fmt(summary.hipStableRatio*100,0)} %.</p>
       <p>Écart médian d’axe projeté : ${fmt(summary.medianAxisDelta)}°. Les seuils sont provisoires et doivent être calibrés sur des essais réels.</p>
       <p>${summary.sampleCount} échantillons exploitables ont été gardés uniquement en mémoire pendant la session. La vidéo n’est pas enregistrée.</p>
-    `;
+    `);
     return;
   }else if(selectedTraining==='marche'){
     const summary=marcheEngine.summary();
     if(!summary.enough){
       card.innerHTML=row('Déplacement','Session courte')+row('Continuité','Session courte')+row('Alternance','Session courte');
-      details.innerHTML='<p>La session est trop courte pour décrire une tendance de marche. FrameCheck ne compte pas ici des « bons pas » : il observe uniquement le mouvement visible.</p>';
+      setDetails('<p>La session est trop courte pour décrire une tendance de marche. FrameCheck ne compte pas ici des « bons pas » : il observe uniquement le mouvement visible.</p>');
       return;
     }
     card.innerHTML=row('Déplacement',summary.displacementLabel)+row('Continuité',summary.continuityLabel)+row('Alternance des pieds',summary.alternationLabel);
-    details.innerHTML=`
+    setDetails(`
       <p><strong>Observation visuelle uniquement :</strong> FrameCheck suit le bassin et les chevilles dans l’image. Il ne juge ni la technique, ni le guidage, ni la musicalité.</p>
       <p>Mouvement détecté sur ${fmt(summary.movingRatio*100,0)} % des échantillons · ${summary.switches} changement(s) de pied dominant détecté(s).</p>
       <p>Amplitude horizontale du bassin : ${fmt(summary.horizontalRange*100)} % du cadre · verticale : ${fmt(summary.verticalRange*100)} %.</p>
       <p>Les seuils sont heuristiques et provisoires. ${summary.sampleCount} échantillons ont été conservés uniquement en mémoire pendant cette session.</p>
-    `;
+    `);
     return;
   }else{
     const summary=liberteEngine.summary();
     if(!summary.enough){
       card.innerHTML=row('Amplitude visible','Session courte')+row('Déplacements','Session courte')+row('Répétitivité','Session courte');
-      details.innerHTML='<p>Une session d’environ 10 secondes ou plus est nécessaire pour décrire la variété visible avec un minimum de stabilité.</p><p>Ce module ne mesure pas scientifiquement la créativité artistique.</p>';
+      setDetails('<p>Une session d’environ 10 secondes ou plus est nécessaire pour décrire la variété visible avec un minimum de stabilité.</p><p>Ce module ne mesure pas scientifiquement la créativité artistique.</p>');
       return;
     }
     card.innerHTML=row('Amplitude visible',summary.amplitudeLabel)+row('Déplacements',summary.displacementLabel)+row('Rotations',summary.rotationLabel)+row('Hauteurs',summary.levelLabel)+row('Répétitivité',summary.repetitionLabel);
-    details.innerHTML=`
+    setDetails(`
       <p><strong>Liberté de mouvement ≠ créativité artistique.</strong> FrameCheck décrit seulement des variations mesurables dans l’image : amplitudes, déplacements du bassin, changements de hauteur, rotations projetées et retour de motifs similaires.</p>
       <p>Amplitude horizontale observée : ${fmt(summary.horizontalRange*100)} % du cadre · verticale : ${fmt(summary.verticalRange*100)} % · plage de rotation projetée : ${fmt(summary.rotationRange)}°.</p>
       <p>Indice heuristique de répétition d’états visibles : ${fmt(summary.repetition*100,0)} %. Ce chiffre n’est pas un score artistique et ses seuils doivent encore être calibrés.</p>
       <p>${summary.sampleCount} échantillons exploitables ont été conservés uniquement en mémoire pendant cette session. La vidéo n’est pas enregistrée.</p>
-    `;
+    `);
     return;
   }
 }
